@@ -64,6 +64,32 @@ export function ResultsReveal({
     setAwards(calculatedAwards)
   }, [participants, allRounds, triviaScores])
 
+  // Pre-calculate final scores (used for skip and winner determination)
+  const finalScoresCalculated = useMemo(() => {
+    const scores: Record<string, number> = {}
+    participants.forEach(p => { scores[p.id] = 0 })
+
+    // Add round scores (100 points per correct guess)
+    allRounds.forEach(round => {
+      round.correctVoters.forEach(voter => {
+        scores[voter.id] = (scores[voter.id] || 0) + 100
+      })
+    })
+
+    // Add trivia scores
+    Object.entries(triviaScores).forEach(([id, score]) => {
+      scores[id] = (scores[id] || 0) + score
+    })
+
+    // Add award points
+    const calculatedAwards = calculateAwards(participants, allRounds, triviaScores)
+    calculatedAwards.forEach(award => {
+      scores[award.recipient.id] = (scores[award.recipient.id] || 0) + award.points
+    })
+
+    return scores
+  }, [participants, allRounds, triviaScores])
+
   // Update chart data whenever scores change
   useEffect(() => {
     setChartData(prev => {
@@ -74,19 +100,6 @@ export function ResultsReveal({
       return [...prev, newPoint]
     })
   }, [liveScores, participants])
-
-  // Reveal awards one by one after part2 completes
-  const revealNextAward = useCallback(() => {
-    if (visibleAwards < awards.length) {
-      const award = awards[visibleAwards]
-      // Add award points to chart
-      setLiveScores(prev => ({
-        ...prev,
-        [award.recipient.id]: (prev[award.recipient.id] || 0) + award.points,
-      }))
-      setVisibleAwards(prev => prev + 1)
-    }
-  }, [visibleAwards, awards])
 
   // Handle advancing to next item
   const advanceToNext = useCallback(() => {
@@ -237,15 +250,15 @@ export function ResultsReveal({
     }
 
     if (phase === 'winner') {
-      // Find winner (highest score)
+      // Find winner using pre-calculated final scores (stable)
       const sortedByScore = [...participants].sort(
-        (a, b) => (liveScores[b.id] || 0) - (liveScores[a.id] || 0)
+        (a, b) => (finalScoresCalculated[b.id] || 0) - (finalScoresCalculated[a.id] || 0)
       )
       const winner = sortedByScore[0]
       return (
         <WinnerReveal
           winner={winner}
-          finalScore={liveScores[winner.id] || 0}
+          finalScore={finalScoresCalculated[winner.id] || 0}
           onComplete={onComplete}
         />
       )
@@ -389,13 +402,8 @@ export function ResultsReveal({
             size="sm"
             onClick={() => {
               setVisibleAwards(awards.length)
-              // Apply all award points
-              awards.forEach(award => {
-                setLiveScores(prev => ({
-                  ...prev,
-                  [award.recipient.id]: (prev[award.recipient.id] || 0) + award.points,
-                }))
-              })
+              // Set to pre-calculated final scores (stable calculation)
+              setLiveScores(finalScoresCalculated)
               setPhase('winner')
             }}
             className="text-muted-foreground"
