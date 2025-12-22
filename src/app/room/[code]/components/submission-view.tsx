@@ -260,7 +260,7 @@ export function SubmissionView({
         return
       }
 
-      // Insert all submissions
+      // Insert all submissions with metadata for trivia
       const submissions = selectedTracks.map((track, index) => ({
         participant_id: currentParticipant.id,
         track_id: track.id,
@@ -269,6 +269,15 @@ export function SubmissionView({
         album_art_url: track.albumArt,
         preview_url: track.previewUrl,
         submission_order: index + 1,
+        // Metadata for trivia questions
+        album_name: track.albumName,
+        release_year: track.releaseYear,
+        duration_ms: track.durationMs,
+        popularity: track.popularity,
+        tempo: track.audioFeatures?.tempo ?? null,
+        valence: track.audioFeatures?.valence ?? null,
+        danceability: track.audioFeatures?.danceability ?? null,
+        energy: track.audioFeatures?.energy ?? null,
       }))
 
       const { error: submissionError } = await supabase

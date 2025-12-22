@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { TriviaCategory } from '@/types/database'
 
 interface TrackData {
@@ -232,57 +231,6 @@ function generateDataQuestions(tracks: TrackData[]): GeneratedQuestion[] {
   return questions
 }
 
-// Generate AI questions using Gemini
-async function generateAIQuestions(tracks: TrackData[], count: number): Promise<GeneratedQuestion[]> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.log('No Gemini API key, skipping AI questions')
-    return []
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey)
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
-
-  const selectedTracks = shuffle(tracks).slice(0, Math.min(count, tracks.length))
-  const questions: GeneratedQuestion[] = []
-
-  for (const track of selectedTracks) {
-    try {
-      const prompt = `Generate a fun Christmas music trivia question about the song "${track.name}" by ${track.artist}${track.releaseYear ? ` (${track.releaseYear})` : ''}.
-
-The question should be:
-- Multiple choice with exactly 4 options
-- Medium difficulty - fun for a family Christmas party
-- Could be about: lyrics, movie/TV appearances, fun facts, cover versions, chart history, or the artist
-- NOT about technical audio features like BPM or key
-
-Return ONLY valid JSON (no markdown, no code blocks):
-{"question":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"Brief fun fact"}`
-
-      const result = await model.generateContent(prompt)
-      const text = result.response.text().trim()
-        .replace(/```json\n?|\n?```/g, '')
-        .trim()
-
-      const parsed = JSON.parse(text)
-
-      questions.push({
-        question_type: 'ai',
-        category: 'trivia',
-        question_text: parsed.question,
-        options: parsed.options as [string, string, string, string],
-        correct_index: parsed.correctIndex,
-        explanation: parsed.explanation,
-        related_track_id: track.id,
-      })
-    } catch (error) {
-      console.error(`Failed to generate AI question for ${track.name}:`, error)
-    }
-  }
-
-  return questions
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { roomId, questionCount = 10 } = await request.json()
@@ -314,7 +262,14 @@ export async function POST(request: NextRequest) {
         track_id,
         track_name,
         artist_name,
-        album_art_url,
+        album_name,
+        release_year,
+        duration_ms,
+        popularity,
+        tempo,
+        valence,
+        danceability,
+        energy,
         participants!inner(room_id)
       `)
       .eq('participants.room_id', roomId)
@@ -323,30 +278,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No submissions found' }, { status: 400 })
     }
 
-    // We need to fetch additional track data from Spotify
-    // For now, use what we have in submissions
-    // In a full implementation, you'd store this metadata in the submissions table
+    // Map submissions to track data for trivia generation
     const tracks: TrackData[] = submissions.map(sub => ({
       id: sub.track_id,
       name: sub.track_name,
       artist: sub.artist_name,
-      albumName: null,
-      releaseYear: null, // Would need to be stored in submissions
-      durationMs: null,
-      popularity: null,
-      tempo: null,
-      valence: null,
-      danceability: null,
-      energy: null,
+      albumName: sub.album_name,
+      releaseYear: sub.release_year,
+      durationMs: sub.duration_ms,
+      popularity: sub.popularity,
+      tempo: sub.tempo,
+      valence: sub.valence,
+      danceability: sub.danceability,
+      energy: sub.energy,
     }))
 
-    // Generate questions
+    // Generate data-driven questions only (no AI - it makes up facts!)
     const dataQuestions = generateDataQuestions(tracks)
-    const aiQuestionCount = Math.min(3, questionCount) // Up to 3 AI questions
-    const aiQuestions = await generateAIQuestions(tracks, aiQuestionCount)
 
-    // Combine and shuffle
-    const allQuestions = shuffle([...dataQuestions, ...aiQuestions])
+    // Shuffle the questions
+    const allQuestions = shuffle(dataQuestions)
 
     // Take the required number
     const selectedQuestions = allQuestions.slice(0, questionCount)
@@ -381,8 +332,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       count: selectedQuestions.length,
-      dataQuestions: dataQuestions.length,
-      aiQuestions: aiQuestions.length,
+      totalAvailable: dataQuestions.length,
     })
 
   } catch (error) {

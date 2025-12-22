@@ -47,6 +47,15 @@ create table if not exists public.submissions (
   preview_url text not null,
   submission_order integer not null,
   played boolean default false,
+  -- Track metadata for trivia
+  album_name varchar(500),
+  release_year integer,
+  duration_ms integer,
+  popularity integer,
+  tempo real,
+  valence real,
+  danceability real,
+  energy real,
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
