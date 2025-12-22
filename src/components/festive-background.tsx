@@ -58,8 +58,8 @@ const generateDecorations = (): Decoration[] => {
 const generateStars = (): Star[] =>
   Array.from({ length: 20 }, (_, i) => ({
     id: i,
-    left: `${seededRandom(i * 61 + 43) * 100}%`,
-    top: `${seededRandom(i * 67 + 47) * 100}%`,
+    left: `${seededRandom(i * 61 + 43) * 90 + 5}%`,
+    top: `${seededRandom(i * 67 + 47) * 85 + 10}%`, // Keep away from top edge
     delay: seededRandom(i * 71 + 53) * 3,
     duration: seededRandom(i * 73 + 59) * 2 + 1,
   }))
@@ -83,6 +83,7 @@ export function FestiveBackground() {
           className="absolute animate-snowfall"
           style={{
             left: flake.left,
+            top: -20, // Start off-screen
             width: flake.size,
             height: flake.size,
             backgroundColor: 'white',

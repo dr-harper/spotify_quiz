@@ -4,45 +4,90 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
 import { FestiveBackground } from '@/components/festive-background'
 import { useBackgroundMusic } from '@/components/background-music'
 
+// Wrap in Suspense for useSearchParams
 export default function Home() {
+  return (
+    <Suspense fallback={
+      <main className="flex min-h-screen flex-col items-center justify-center p-4">
+        <div className="animate-pulse text-2xl">Loading...</div>
+      </main>
+    }>
+      <HomeContent />
+    </Suspense>
+  )
+}
+
+function HomeContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGuestLoading, setIsGuestLoading] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [guestName, setGuestName] = useState('')
   const [showGuestForm, setShowGuestForm] = useState(false)
+  const [roomName, setRoomName] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const { isPlaying, stop, play, setTrack } = useBackgroundMusic()
+
+  // Room code from join link (e.g. /?join=ABC123)
+  const joinCode = searchParams.get('join')
 
   // Ensure home track plays on this page
   useEffect(() => {
     setTrack('home')
   }, [setTrack])
 
+  // Fetch room name when joining
+  useEffect(() => {
+    if (!joinCode) return
+
+    const fetchRoomName = async () => {
+      const { data } = await supabase
+        .from('rooms')
+        .select('name')
+        .eq('room_code', joinCode.toUpperCase())
+        .single()
+
+      if (data?.name) {
+        setRoomName(data.name)
+      }
+    }
+
+    fetchRoomName()
+  }, [joinCode, supabase])
+
   useEffect(() => {
     // Check if user is already logged in
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        router.push('/lobby')
+        // If joining a room, go to auth callback to add as participant
+        if (joinCode) {
+          router.push(`/auth/callback?room=${joinCode}`)
+        } else {
+          router.push('/lobby')
+        }
       } else {
         setIsCheckingAuth(false)
       }
     }
     checkAuth()
-  }, [router, supabase.auth])
+  }, [router, supabase.auth, joinCode])
 
   const handleSpotifyLogin = async () => {
     setIsLoading(true)
+    const callbackUrl = joinCode
+      ? `${window.location.origin}/auth/callback?room=${joinCode}`
+      : `${window.location.origin}/auth/callback`
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'spotify',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl,
         scopes: 'user-read-email user-read-private playlist-modify-private playlist-modify-public',
       },
     })
@@ -72,7 +117,12 @@ export default function Home() {
         })
       }
 
-      router.push('/lobby')
+      // If joining a room, go to auth callback to add as participant
+      if (joinCode) {
+        router.push(`/auth/callback?room=${joinCode}`)
+      } else {
+        router.push('/lobby')
+      }
     } catch (error) {
       console.error('Guest login error:', error)
       setIsGuestLoading(false)
@@ -100,6 +150,22 @@ export default function Home() {
           <CardDescription className="text-base sm:text-lg text-muted-foreground">
             The Christmas music guessing game
           </CardDescription>
+          {joinCode && (
+            <div className="mt-3 p-3 bg-secondary/20 rounded-lg border border-secondary/30">
+              <p className="text-sm text-secondary-foreground">
+                {roomName ? (
+                  <>
+                    Joining <span className="font-bold text-secondary">{roomName}</span>
+                    <span className="text-muted-foreground"> ({joinCode})</span>
+                  </>
+                ) : (
+                  <>
+                    Joining room <span className="font-bold text-secondary">{joinCode}</span>
+                  </>
+                )}
+              </p>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-4 sm:space-y-6">
           <div className="text-center space-y-2 sm:space-y-4 text-sm text-muted-foreground">

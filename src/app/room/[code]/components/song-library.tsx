@@ -34,16 +34,6 @@ function formatDuration(ms: number | null): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
-function formatTempo(tempo: number | null): string {
-  if (!tempo) return '-'
-  return `${Math.round(tempo)} BPM`
-}
-
-function formatPercentage(value: number | null): string {
-  if (value === null || value === undefined) return '-'
-  return `${Math.round(value * 100)}%`
-}
-
 export function SongLibrary({
   roomId,
   roomCode,
@@ -53,7 +43,7 @@ export function SongLibrary({
 }: SongLibraryProps) {
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false)
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState<'submitter' | 'name' | 'year' | 'tempo' | 'popularity'>('submitter')
+  const [sortBy, setSortBy] = useState<'submitter' | 'name' | 'year' | 'popularity'>('submitter')
   const [sortAsc, setSortAsc] = useState(true)
 
   const handleSort = (column: typeof sortBy) => {
@@ -76,9 +66,6 @@ export function SongLibrary({
         break
       case 'year':
         comparison = (a.release_year || 0) - (b.release_year || 0)
-        break
-      case 'tempo':
-        comparison = (a.tempo || 0) - (b.tempo || 0)
         break
       case 'popularity':
         comparison = (a.popularity || 0) - (b.popularity || 0)
@@ -120,8 +107,6 @@ export function SongLibrary({
         participant: sub.participant,
         count: 0,
         avgPopularity: 0,
-        avgTempo: 0,
-        tempoCount: 0,
         popCount: 0,
       }
     }
@@ -130,17 +115,12 @@ export function SongLibrary({
       acc[pid].avgPopularity += sub.popularity
       acc[pid].popCount++
     }
-    if (sub.tempo) {
-      acc[pid].avgTempo += sub.tempo
-      acc[pid].tempoCount++
-    }
     return acc
-  }, {} as Record<string, { participant: Participant; count: number; avgPopularity: number; avgTempo: number; tempoCount: number; popCount: number }>)
+  }, {} as Record<string, { participant: Participant; count: number; avgPopularity: number; popCount: number }>)
 
   // Calculate averages
   Object.values(participantStats).forEach(stat => {
     if (stat.popCount > 0) stat.avgPopularity = stat.avgPopularity / stat.popCount
-    if (stat.tempoCount > 0) stat.avgTempo = stat.avgTempo / stat.tempoCount
   })
 
   const SortHeader = ({ column, children }: { column: typeof sortBy; children: React.ReactNode }) => (
@@ -193,7 +173,7 @@ export function SongLibrary({
 
       {/* Participant Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {Object.values(participantStats).map(({ participant, count, avgPopularity, avgTempo, popCount }) => (
+        {Object.values(participantStats).map(({ participant, count, avgPopularity, popCount }) => (
           <Card key={participant.id} className="p-3">
             <div className="flex items-center gap-2 mb-2">
               <Avatar className="h-6 w-6">
@@ -233,10 +213,7 @@ export function SongLibrary({
                   <TableHead>Artist</TableHead>
                   <SortHeader column="year">Year</SortHeader>
                   <TableHead>Duration</TableHead>
-                  <SortHeader column="tempo">Tempo</SortHeader>
                   <SortHeader column="popularity">Popularity</SortHeader>
-                  <TableHead>Energy</TableHead>
-                  <TableHead>Dance</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -275,7 +252,6 @@ export function SongLibrary({
                     </TableCell>
                     <TableCell>{sub.release_year || '-'}</TableCell>
                     <TableCell>{formatDuration(sub.duration_ms)}</TableCell>
-                    <TableCell>{formatTempo(sub.tempo)}</TableCell>
                     <TableCell>
                       {sub.popularity !== null ? (
                         <div className="flex items-center gap-1">
@@ -289,8 +265,6 @@ export function SongLibrary({
                         </div>
                       ) : '-'}
                     </TableCell>
-                    <TableCell>{formatPercentage(sub.energy)}</TableCell>
-                    <TableCell>{formatPercentage(sub.danceability)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

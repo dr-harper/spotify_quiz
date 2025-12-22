@@ -10,14 +10,10 @@ interface TrackData {
   releaseYear: number | null
   durationMs: number | null
   popularity: number | null
-  tempo: number | null
-  valence: number | null
-  danceability: number | null
-  energy: number | null
 }
 
 interface GeneratedQuestion {
-  question_type: 'data' | 'ai'
+  question_type: 'data'
   category: TriviaCategory
   question_text: string
   options: [string, string, string, string]
@@ -103,25 +99,7 @@ function generateDataQuestions(tracks: TrackData[]): GeneratedQuestion[] {
     })
   }
 
-  // 4. Fastest Tempo - "Which song has the fastest beat?"
-  const tracksWithTempo = tracks.filter(t => t.tempo)
-  if (tracksWithTempo.length >= 4) {
-    const selected = shuffle(tracksWithTempo).slice(0, 4)
-    const sorted = [...selected].sort((a, b) => (b.tempo || 0) - (a.tempo || 0))
-    const fastest = sorted[0]
-    const options = selected.map(t => `${t.name} - ${t.artist}`) as [string, string, string, string]
-    questions.push({
-      question_type: 'data',
-      category: 'tempo',
-      question_text: 'Which of these songs has the fastest beat?',
-      options,
-      correct_index: selected.findIndex(t => t.id === fastest.id),
-      explanation: `"${fastest.name}" has a tempo of ${Math.round(fastest.tempo || 0)} BPM`,
-      related_track_id: fastest.id,
-    })
-  }
-
-  // 5. Longest Track - "Which song is the longest?"
+  // 4. Longest Track - "Which song is the longest?"
   const tracksWithDuration = tracks.filter(t => t.durationMs)
   if (tracksWithDuration.length >= 4) {
     const selected = shuffle(tracksWithDuration).slice(0, 4)
@@ -157,61 +135,7 @@ function generateDataQuestions(tracks: TrackData[]): GeneratedQuestion[] {
     })
   }
 
-  // 7. Happiest Song - "Which sounds most cheerful?" (valence)
-  const tracksWithValence = tracks.filter(t => t.valence !== null)
-  if (tracksWithValence.length >= 4) {
-    const selected = shuffle(tracksWithValence).slice(0, 4)
-    const sorted = [...selected].sort((a, b) => (b.valence || 0) - (a.valence || 0))
-    const happiest = sorted[0]
-    const options = selected.map(t => `${t.name} - ${t.artist}`) as [string, string, string, string]
-    questions.push({
-      question_type: 'data',
-      category: 'mood',
-      question_text: 'According to Spotify, which song sounds the most cheerful?',
-      options,
-      correct_index: selected.findIndex(t => t.id === happiest.id),
-      explanation: `"${happiest.name}" has the highest 'happiness' score`,
-      related_track_id: happiest.id,
-    })
-  }
-
-  // 8. Most Danceable - "Which is most danceable?"
-  const tracksWithDance = tracks.filter(t => t.danceability !== null)
-  if (tracksWithDance.length >= 4) {
-    const selected = shuffle(tracksWithDance).slice(0, 4)
-    const sorted = [...selected].sort((a, b) => (b.danceability || 0) - (a.danceability || 0))
-    const mostDanceable = sorted[0]
-    const options = selected.map(t => `${t.name} - ${t.artist}`) as [string, string, string, string]
-    questions.push({
-      question_type: 'data',
-      category: 'mood',
-      question_text: 'Which song would get you dancing the most?',
-      options,
-      correct_index: selected.findIndex(t => t.id === mostDanceable.id),
-      explanation: `"${mostDanceable.name}" has the highest danceability score`,
-      related_track_id: mostDanceable.id,
-    })
-  }
-
-  // 9. Most Energetic
-  const tracksWithEnergy = tracks.filter(t => t.energy !== null)
-  if (tracksWithEnergy.length >= 4) {
-    const selected = shuffle(tracksWithEnergy).slice(0, 4)
-    const sorted = [...selected].sort((a, b) => (b.energy || 0) - (a.energy || 0))
-    const mostEnergetic = sorted[0]
-    const options = selected.map(t => `${t.name} - ${t.artist}`) as [string, string, string, string]
-    questions.push({
-      question_type: 'data',
-      category: 'mood',
-      question_text: 'Which of these songs has the highest energy?',
-      options,
-      correct_index: selected.findIndex(t => t.id === mostEnergetic.id),
-      explanation: `"${mostEnergetic.name}" is the most energetic track`,
-      related_track_id: mostEnergetic.id,
-    })
-  }
-
-  // 10. Release Decade
+  // 7. Release Decade
   if (tracksWithYear.length >= 1) {
     const track = shuffle(tracksWithYear)[0]
     const correctDecade = Math.floor((track.releaseYear || 2000) / 10) * 10
@@ -256,6 +180,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch all submissions for this room with track metadata
+    // Note: Audio features (tempo, danceability, energy, valence) are no longer available
+    // as Spotify deprecated the audio-features endpoint
     const { data: submissions, error: subError } = await supabase
       .from('submissions')
       .select(`
@@ -266,10 +192,6 @@ export async function POST(request: NextRequest) {
         release_year,
         duration_ms,
         popularity,
-        tempo,
-        valence,
-        danceability,
-        energy,
         participants!inner(room_id)
       `)
       .eq('participants.room_id', roomId)
@@ -287,10 +209,6 @@ export async function POST(request: NextRequest) {
       releaseYear: sub.release_year,
       durationMs: sub.duration_ms,
       popularity: sub.popularity,
-      tempo: sub.tempo,
-      valence: sub.valence,
-      danceability: sub.danceability,
-      energy: sub.energy,
     }))
 
     // Generate data-driven questions only (no AI - it makes up facts!)

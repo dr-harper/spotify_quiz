@@ -43,6 +43,8 @@ export function QuizView({
   onNavigateToLobby,
 }: QuizViewProps) {
   const settings = room.settings || DEFAULT_GAME_SETTINGS
+  // Only include participants who have submitted songs
+  const submittedParticipants = participants.filter(p => p.has_submitted)
   const [rounds, setRounds] = useState<RoundData[]>([])
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0)
   const [hasVoted, setHasVoted] = useState(false)
@@ -94,7 +96,7 @@ export function QuizView({
         const { data: submissions } = await supabase
           .from('submissions')
           .select('*')
-          .in('participant_id', participants.map(p => p.id))
+          .in('participant_id', submittedParticipants.map(p => p.id))
 
         if (!submissions || submissions.length === 0) {
           console.error('No submissions found')
@@ -117,7 +119,7 @@ export function QuizView({
     }
 
     await fetchRounds()
-  }, [isHost, room.id, participants, supabase])
+  }, [isHost, room.id, submittedParticipants, supabase])
 
   const fetchRounds = useCallback(async () => {
     const { data: quizRounds } = await supabase
@@ -148,13 +150,13 @@ export function QuizView({
 
     const roundData: RoundData[] = filteredRounds.map(round => {
       const submission = submissions.find(s => s.id === round.submission_id)!
-      const correctParticipant = participants.find(p => p.id === submission.participant_id)!
+      const correctParticipant = submittedParticipants.find(p => p.id === submission.participant_id)!
       return { round, submission, correctParticipant }
     })
 
     setRounds(roundData)
     setIsLoading(false)
-  }, [room.id, participants, supabase, roundType])
+  }, [room.id, submittedParticipants, supabase, roundType])
 
   useEffect(() => {
     if (initRef.current) return
@@ -468,7 +470,7 @@ export function QuizView({
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
-              {participants.map((participant) => (
+              {submittedParticipants.map((participant) => (
                 <Button
                   key={participant.id}
                   onClick={() => handleVote(participant.id)}
@@ -514,13 +516,13 @@ export function QuizView({
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
               <span>Players</span>
               <Badge variant="outline" className="text-xs">
-                {roundVoters.size}/{participants.length} voted
+                {roundVoters.size}/{submittedParticipants.length} voted
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="flex flex-wrap gap-2">
-              {participants.map((participant) => {
+              {submittedParticipants.map((participant) => {
                 const hasVotedThisRound = roundVoters.has(participant.id)
                 return (
                   <div

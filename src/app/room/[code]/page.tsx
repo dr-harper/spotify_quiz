@@ -17,7 +17,12 @@ export default function RoomPage() {
   const router = useRouter()
   const roomCode = params.code as string
   const supabase = createClient()
-  const { stop: stopMusic, play: playMusic } = useBackgroundMusic()
+  const { stop: stopMusic, play: playMusic, setTrack } = useBackgroundMusic()
+
+  // Set app music track
+  useEffect(() => {
+    setTrack('app')
+  }, [setTrack])
 
   const [room, setRoom] = useState<Room | null>(null)
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -159,6 +164,34 @@ export default function RoomPage() {
     }
   }
 
+  // Start quiz - clears old rounds to ensure fresh shuffle
+  const startQuiz = async () => {
+    if (!room || !currentParticipant?.is_host) return
+
+    // Fetch old rounds first to delete associated votes
+    const { data: oldRounds } = await supabase
+      .from('quiz_rounds')
+      .select('id')
+      .eq('room_id', room.id)
+
+    if (oldRounds && oldRounds.length > 0) {
+      // Delete votes for old rounds
+      await supabase
+        .from('votes')
+        .delete()
+        .in('round_id', oldRounds.map(r => r.id))
+
+      // Delete old quiz rounds to ensure fresh shuffle
+      await supabase
+        .from('quiz_rounds')
+        .delete()
+        .eq('room_id', room.id)
+    }
+
+    // Now start the game
+    await updateRoomStatus('PLAYING_ROUND_1')
+  }
+
   // Update room settings (host only)
   const updateRoomSettings = async (settings: GameSettings) => {
     if (!room || !currentParticipant?.is_host) return
@@ -240,13 +273,14 @@ export default function RoomPage() {
             room={room}
             participants={participants}
             currentParticipant={currentParticipant}
-            onAllSubmitted={() => updateRoomStatus('PLAYING_ROUND_1')}
+            onAllSubmitted={startQuiz}
             onNavigateToLobby={() => updateRoomStatus('LOBBY')}
           />
         )
       case 'PLAYING_ROUND_1':
         return (
           <QuizView
+            key="round1"
             room={room}
             participants={participants}
             currentParticipant={currentParticipant}
@@ -275,6 +309,7 @@ export default function RoomPage() {
       case 'PLAYING_ROUND_2':
         return (
           <QuizView
+            key="round2"
             room={room}
             participants={participants}
             currentParticipant={currentParticipant}

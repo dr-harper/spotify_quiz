@@ -165,13 +165,15 @@ export function AppHeader() {
                 <DropdownMenuItem onClick={() => setShowAbout(true)}>
                   About
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleSeedTestData}
-                  disabled={isSeeding}
-                  className="text-amber-500"
-                >
-                  {isSeeding ? 'Creating...' : 'Create Test Game'}
-                </DropdownMenuItem>
+                {process.env.NODE_ENV !== 'production' && (
+                  <DropdownMenuItem
+                    onClick={handleSeedTestData}
+                    disabled={isSeeding}
+                    className="text-amber-500"
+                  >
+                    {isSeeding ? 'Creating...' : 'Create Test Game'}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                   Sign Out

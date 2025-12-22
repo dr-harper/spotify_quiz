@@ -43,6 +43,13 @@ export async function middleware(request: NextRequest) {
   if (isProtectedPath && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
+
+    // Preserve room code for join flow
+    const roomMatch = request.nextUrl.pathname.match(/^\/room\/([A-Z0-9]+)$/i)
+    if (roomMatch) {
+      url.searchParams.set('join', roomMatch[1].toUpperCase())
+    }
+
     return NextResponse.redirect(url)
   }
 

@@ -62,6 +62,11 @@ export interface Submission {
   submission_order: number
   played: boolean
   created_at: string
+  // Metadata fields (added via migration for trivia)
+  album_name: string | null
+  release_year: number | null
+  duration_ms: number | null
+  popularity: number | null
 }
 
 export interface QuizRound {
@@ -96,23 +101,9 @@ export interface SpotifyTrack {
   duration_ms: number
 }
 
-// Audio features from Spotify API
-export interface AudioFeatures {
-  tempo: number // BPM
-  key: number // 0-11 (C=0, C#=1, etc.)
-  mode: number // 1=major, 0=minor
-  timeSignature: number
-  danceability: number // 0.0-1.0
-  energy: number // 0.0-1.0
-  valence: number // 0.0-1.0 (happiness/positivity)
-  acousticness: number // 0.0-1.0
-  instrumentalness: number // 0.0-1.0
-  speechiness: number // 0.0-1.0
-  liveness: number // 0.0-1.0
-  loudness: number // dB
-}
-
 // Simplified track for UI with rich metadata
+// Note: Audio features (tempo, danceability, energy, valence) are no longer available
+// as Spotify deprecated the audio-features endpoint in late 2024
 export interface Track {
   id: string
   name: string
@@ -126,25 +117,19 @@ export interface Track {
   explicit: boolean
   previewUrl: string | null
   hasPreview: boolean
-  audioFeatures: AudioFeatures | null
   // Computed/heuristic fields
   isLikelyChristmas: boolean // Based on keywords
   christmasKeywordMatches: string[] // Which keywords matched
 }
 
 // Trivia question types
-export type TriviaQuestionType = 'data' | 'ai'
+export type TriviaQuestionType = 'data'
 export type TriviaCategory =
   | 'artist'      // Who sang this song?
   | 'year'        // Release year questions
-  | 'tempo'       // BPM comparisons
   | 'duration'    // Song length
   | 'popularity'  // Spotify popularity
-  | 'mood'        // Valence/energy questions
   | 'album'       // Album matching
-  | 'lyrics'      // Lyric completion (AI)
-  | 'trivia'      // Fun facts (AI)
-  | 'movie'       // Movie/advert appearances (AI)
 
 export interface TriviaQuestion {
   id: string

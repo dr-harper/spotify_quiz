@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import spotifyPreviewFinder from 'spotify-preview-finder'
-import type { Track, AudioFeatures } from '@/types/database'
+import type { Track } from '@/types/database'
 
 // Cache the access token for fetching album art
 let accessToken: string | null = null
@@ -43,50 +43,6 @@ async function getSpotifyAccessToken(): Promise<string> {
   accessToken = data.access_token
   tokenExpiry = Date.now() + (data.expires_in - 300) * 1000
   return accessToken!
-}
-
-// Fetch audio features for multiple tracks
-async function fetchAudioFeatures(
-  trackIds: string[],
-  token: string
-): Promise<Map<string, AudioFeatures>> {
-  const featuresMap = new Map<string, AudioFeatures>()
-
-  if (trackIds.length === 0) return featuresMap
-
-  try {
-    const response = await fetch(
-      `https://api.spotify.com/v1/audio-features?ids=${trackIds.join(',')}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-
-    const data = await response.json()
-
-    if (data.audio_features) {
-      for (const feature of data.audio_features) {
-        if (feature) {
-          featuresMap.set(feature.id, {
-            tempo: feature.tempo,
-            key: feature.key,
-            mode: feature.mode,
-            timeSignature: feature.time_signature,
-            danceability: feature.danceability,
-            energy: feature.energy,
-            valence: feature.valence,
-            acousticness: feature.acousticness,
-            instrumentalness: feature.instrumentalness,
-            speechiness: feature.speechiness,
-            liveness: feature.liveness,
-            loudness: feature.loudness,
-          })
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error fetching audio features:', error)
-  }
-
-  return featuresMap
 }
 
 // Spotify track details type
@@ -133,14 +89,11 @@ export async function GET(request: NextRequest) {
     const trackIds = tracksWithPreviews.map((t: { trackId: string }) => t.trackId)
     const trackIdsString = trackIds.join(',')
 
-    // Fetch track details and audio features in parallel
-    const [spotifyResponse, audioFeaturesMap] = await Promise.all([
-      fetch(
-        `https://api.spotify.com/v1/tracks?ids=${trackIdsString}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      ),
-      fetchAudioFeatures(trackIds, token)
-    ])
+    // Fetch track details from Spotify API
+    const spotifyResponse = await fetch(
+      `https://api.spotify.com/v1/tracks?ids=${trackIdsString}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
 
     const spotifyData = await spotifyResponse.json()
 
@@ -155,6 +108,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Build enriched tracks
+    // Note: Audio features (tempo, danceability, energy, valence) are no longer available
+    // as Spotify has deprecated the audio-features endpoint
     const tracks: Track[] = tracksWithPreviews.map((track: {
       name: string
       trackId: string
@@ -162,7 +117,6 @@ export async function GET(request: NextRequest) {
       albumName: string
     }) => {
       const details = trackDetailsMap.get(track.trackId)
-      const audioFeatures = audioFeaturesMap.get(track.trackId) || null
 
       const albumName = details?.album?.name || track.albumName || ''
       const releaseDate = details?.album?.release_date || null
@@ -185,7 +139,6 @@ export async function GET(request: NextRequest) {
         explicit: details?.explicit || false,
         previewUrl: track.previewUrls[0],
         hasPreview: true,
-        audioFeatures,
         isLikelyChristmas,
         christmasKeywordMatches,
       }

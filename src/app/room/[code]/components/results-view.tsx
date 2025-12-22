@@ -4,12 +4,16 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ResultsReveal } from './results-reveal'
+import { SongLibrary } from './song-library'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
 import type { Room, Participant, Submission } from '@/types/database'
+
+interface SubmissionWithParticipant extends Submission {
+  participant: Participant
+}
 
 interface ResultsViewProps {
   room: Room
@@ -21,8 +25,7 @@ interface ResultsViewProps {
 interface RoundResult {
   submission: Submission
   correctParticipant: Participant
-  myGuess: Participant | null
-  wasCorrect: boolean
+  allGuesses: Map<string, { guessedParticipant: Participant | null; isCorrect: boolean }>
 }
 
 interface RoundScore {
@@ -43,12 +46,13 @@ export function ResultsView({
   currentParticipant,
   onPlayAgain,
 }: ResultsViewProps) {
-  const [phase, setPhase] = useState<'reveal' | 'results'>('reveal')
+  const [phase, setPhase] = useState<'reveal' | 'results' | 'library'>('reveal')
   const [part1Rounds, setPart1Rounds] = useState<RoundDetail[]>([])
   const [part2Rounds, setPart2Rounds] = useState<RoundDetail[]>([])
   const [triviaScores, setTriviaScores] = useState<Record<string, number>>({})
   const [finalScores, setFinalScores] = useState<Participant[]>([])
   const [roundResults, setRoundResults] = useState<RoundResult[]>([])
+  const [allSubmissions, setAllSubmissions] = useState<SubmissionWithParticipant[]>([])
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false)
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null)
   const [showAnswers, setShowAnswers] = useState(false)
@@ -78,6 +82,22 @@ export function ResultsView({
 
       if (scoresData) {
         setFinalScores(scoresData as Participant[])
+      }
+
+      // Fetch all submissions with participant info for song library
+      const participantIds = participants.map(p => p.id)
+      const { data: submissionsData } = await supabase
+        .from('submissions')
+        .select('*')
+        .in('participant_id', participantIds)
+        .order('submission_order', { ascending: true })
+
+      if (submissionsData) {
+        const submissionsWithParticipant: SubmissionWithParticipant[] = submissionsData.map(sub => ({
+          ...sub,
+          participant: participants.find(p => p.id === sub.participant_id)!,
+        }))
+        setAllSubmissions(submissionsWithParticipant)
       }
 
       // Fetch round results with votes
@@ -141,20 +161,30 @@ export function ResultsView({
         setPart1Rounds(details.slice(0, midpoint))
         setPart2Rounds(details.slice(midpoint))
 
-        // Fetch my votes for round results
-        const myVotes = allVotes?.filter(v => v.voter_id === currentParticipant.id) || []
-
+        // Build results with everyone's guesses
         const results: RoundResult[] = quizRounds.map((round: { submission: Submission; id: string }) => {
           const submission = round.submission as Submission
           const correctParticipant = participants.find(p => p.id === submission.participant_id)!
-          const myVote = myVotes.find(v => v.round_id === round.id)
-          const myGuess = myVote ? participants.find(p => p.id === myVote.guessed_participant_id) || null : null
+          const roundVotes = allVotes?.filter(v => v.round_id === round.id) || []
+
+          // Map of participant ID -> their guess
+          const allGuesses = new Map<string, { guessedParticipant: Participant | null; isCorrect: boolean }>()
+          participants.forEach(p => {
+            const vote = roundVotes.find(v => v.voter_id === p.id)
+            if (vote) {
+              const guessedParticipant = vote.guessed_participant_id
+                ? participants.find(gp => gp.id === vote.guessed_participant_id) || null
+                : null
+              allGuesses.set(p.id, { guessedParticipant, isCorrect: vote.is_correct })
+            } else {
+              allGuesses.set(p.id, { guessedParticipant: null, isCorrect: false })
+            }
+          })
 
           return {
             submission,
             correctParticipant,
-            myGuess,
-            wasCorrect: myVote?.is_correct || false,
+            allGuesses,
           }
         })
 
@@ -239,7 +269,10 @@ export function ResultsView({
     }
   }
 
-  const correctCount = roundResults.filter(r => r.wasCorrect).length
+  const correctCount = roundResults.filter(r => {
+    const myGuess = r.allGuesses.get(currentParticipant.id)
+    return myGuess?.isCorrect || false
+  }).length
 
   // Show loading state
   if (isLoading) {
@@ -263,13 +296,32 @@ export function ResultsView({
     )
   }
 
+  // Show song library
+  if (phase === 'library') {
+    return (
+      <main className="min-h-screen p-4 py-8">
+        <div className="max-w-6xl mx-auto">
+          <SongLibrary
+            roomId={room.id}
+            roomCode={room.room_code}
+            submissions={allSubmissions}
+            hasSpotify={hasSpotify}
+            onClose={() => setPhase('results')}
+          />
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center p-4 py-8">
-      <div className="w-full max-w-md space-y-6">
-        <GameBreadcrumbs currentStage="results" />
+      <div className="w-full max-w-6xl">
+        <div className="max-w-md mx-auto lg:max-w-none">
+          <GameBreadcrumbs currentStage="results" />
+        </div>
 
         {/* Header */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-2 mt-6">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
             Quiz Complete!
           </h1>
@@ -278,153 +330,200 @@ export function ResultsView({
           </p>
         </div>
 
-        {/* Leaderboard */}
-        <Card className="border-2 border-secondary/30">
-          <CardHeader>
-            <CardTitle className="text-center">Final Scores</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {finalScores.map((participant, index) => (
-                <div
-                  key={participant.id}
-                  className={`flex items-center gap-4 p-3 rounded-lg border ${getRankStyle(index)} ${
-                    participant.id === currentParticipant.id ? 'ring-2 ring-primary' : ''
-                  }`}
-                >
-                  <span className="text-2xl w-10 text-center">
-                    {getRankEmoji(index)}
-                  </span>
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={participant.avatar_url || undefined} />
-                    <AvatarFallback>
-                      {participant.display_name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <p className="font-semibold">
-                      {participant.display_name}
-                      {participant.id === currentParticipant.id && (
-                        <span className="text-muted-foreground text-sm ml-2">(You)</span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-secondary">{participant.score}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Show/Hide Answers */}
-        <Button
-          onClick={() => setShowAnswers(!showAnswers)}
-          variant="outline"
-          className="w-full"
-        >
-          {showAnswers ? 'Hide Answers' : 'Show All Answers'}
-        </Button>
-
-        {/* Answers */}
-        {showAnswers && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-center text-lg">Round by Round</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {roundResults.map((result, index) => (
-                <div
-                  key={index}
-                  className={`p-3 rounded-lg border ${
-                    result.wasCorrect ? 'border-accent/50 bg-accent/10' : 'border-border'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    {result.submission.album_art_url && (
-                      <img
-                        src={result.submission.album_art_url}
-                        alt=""
-                        className="w-12 h-12 rounded"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {result.submission.track_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {result.submission.artist_name}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-muted-foreground">Picked by:</span>
-                        <span className="text-xs font-semibold text-secondary">
-                          {result.correctParticipant.display_name}
-                        </span>
+        {/* Two-column layout on larger screens */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Left Column - Scores & Actions (2/5 width on lg) */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Leaderboard */}
+            <Card className="border-2 border-secondary/30">
+              <CardHeader>
+                <CardTitle className="text-center">Final Scores</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {finalScores.map((participant, index) => (
+                    <div
+                      key={participant.id}
+                      className={`flex items-center gap-4 p-3 rounded-lg border ${getRankStyle(index)} ${
+                        participant.id === currentParticipant.id ? 'ring-2 ring-primary' : ''
+                      }`}
+                    >
+                      <span className="text-2xl w-10 text-center">
+                        {getRankEmoji(index)}
+                      </span>
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={participant.avatar_url || undefined} />
+                        <AvatarFallback>
+                          {participant.display_name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <p className="font-semibold">
+                          {participant.display_name}
+                          {participant.id === currentParticipant.id && (
+                            <span className="text-muted-foreground text-sm ml-2">(You)</span>
+                          )}
+                        </p>
                       </div>
-                      {result.myGuess && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-muted-foreground">You guessed:</span>
-                          <span className={`text-xs font-semibold ${result.wasCorrect ? 'text-accent' : 'text-destructive'}`}>
-                            {result.myGuess.display_name}
-                            {result.wasCorrect ? ' ✓' : ' ✗'}
-                          </span>
-                        </div>
-                      )}
+                      <div className="text-right">
+                        <p className="text-xl font-bold text-secondary">{participant.score}</p>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+              </CardContent>
+            </Card>
 
-        {/* Create Playlist */}
-        <Card className="border-2 border-accent/30">
-          <CardContent className="pt-6">
-            {playlistUrl ? (
-              <div className="text-center space-y-3">
-                <p className="text-accent font-semibold">Playlist created!</p>
-                <Button
-                  asChild
-                  className="w-full h-12 bg-[#1DB954] hover:bg-[#1ed760] text-white"
-                >
-                  <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
-                    Open in Spotify
-                  </a>
-                </Button>
-              </div>
-            ) : hasSpotify ? (
+            {/* View Options - toggle for mobile, Song Library button for desktop */}
+            <div className="flex gap-2">
               <Button
-                onClick={handleCreatePlaylist}
-                disabled={isCreatingPlaylist}
-                variant="secondary"
+                onClick={() => setShowAnswers(!showAnswers)}
+                variant="outline"
+                className="flex-1 lg:hidden"
+              >
+                {showAnswers ? 'Hide Answers' : 'Show Answers'}
+              </Button>
+              <Button
+                onClick={() => setPhase('library')}
+                variant="outline"
+                className="flex-1"
+              >
+                Song Library
+              </Button>
+            </div>
+
+            {/* Create Playlist */}
+            <Card className="border-2 border-accent/30">
+              <CardContent className="pt-6">
+                {playlistUrl ? (
+                  <div className="text-center space-y-3">
+                    <p className="text-accent font-semibold">Playlist created!</p>
+                    <Button
+                      asChild
+                      className="w-full h-12 bg-[#1DB954] hover:bg-[#1ed760] text-white"
+                    >
+                      <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
+                        Open in Spotify
+                      </a>
+                    </Button>
+                  </div>
+                ) : hasSpotify ? (
+                  <Button
+                    onClick={handleCreatePlaylist}
+                    disabled={isCreatingPlaylist}
+                    variant="secondary"
+                    className="w-full h-12"
+                  >
+                    {isCreatingPlaylist ? 'Creating Playlist...' : 'Save All Songs to Spotify Playlist'}
+                  </Button>
+                ) : (
+                  <p className="text-center text-sm text-muted-foreground py-2">
+                    Connect Spotify from the menu to save playlists
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Actions */}
+            <div className="space-y-3">
+              {isHost && (
+                <Button onClick={handlePlayAgain} className="w-full h-12 text-lg">
+                  Play Again
+                </Button>
+              )}
+              <Button
+                onClick={handleBackToLobby}
+                variant="outline"
                 className="w-full h-12"
               >
-                {isCreatingPlaylist ? 'Creating Playlist...' : 'Save All Songs to Spotify Playlist'}
+                Back to Lobby
               </Button>
-            ) : (
-              <p className="text-center text-sm text-muted-foreground py-2">
-                Connect Spotify from the menu to save playlists
-              </p>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </div>
 
-        {/* Actions */}
-        <div className="space-y-3">
-          {isHost && (
-            <Button onClick={handlePlayAgain} className="w-full h-12 text-lg">
-              Play Again
-            </Button>
-          )}
-          <Button
-            onClick={handleBackToLobby}
-            variant="outline"
-            className="w-full h-12"
-          >
-            Back to Lobby
-          </Button>
+          {/* Right Column - Answers Table (3/5 width on lg, always visible on lg) */}
+          <div className={`lg:col-span-3 ${showAnswers ? 'block' : 'hidden lg:block'}`}>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-center text-lg">Round by Round</CardTitle>
+              </CardHeader>
+              <CardContent className="px-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">Song</th>
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">Answer</th>
+                        {finalScores.map(p => (
+                          <th key={p.id} className="text-center py-2 px-2 font-medium text-muted-foreground">
+                            <div className="flex flex-col items-center gap-1">
+                              <Avatar className="h-6 w-6">
+                                <AvatarImage src={p.avatar_url || undefined} />
+                                <AvatarFallback className="text-xs">{p.display_name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs truncate max-w-[60px]" title={p.display_name}>
+                                {p.id === currentParticipant.id ? 'You' : p.display_name.split(' ')[0]}
+                              </span>
+                            </div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {roundResults.map((result, index) => (
+                        <tr key={index} className="border-b border-border/50 last:border-0">
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-2">
+                              {result.submission.album_art_url && (
+                                <img
+                                  src={result.submission.album_art_url}
+                                  alt=""
+                                  className="w-8 h-8 rounded flex-shrink-0"
+                                />
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-medium truncate max-w-[100px]" title={result.submission.track_name}>
+                                  {result.submission.track_name}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate max-w-[100px]" title={result.submission.artist_name}>
+                                  {result.submission.artist_name}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className="font-medium text-secondary whitespace-nowrap">
+                              {result.correctParticipant.display_name}
+                            </span>
+                          </td>
+                          {finalScores.map(p => {
+                            const guess = result.allGuesses.get(p.id)
+                            const guessedName = guess?.guessedParticipant?.display_name
+                            return (
+                              <td key={p.id} className="py-2 px-2 text-center">
+                                {guess?.guessedParticipant ? (
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <span className={`text-xs font-medium truncate max-w-[60px] ${guess.isCorrect ? 'text-accent' : 'text-destructive'}`} title={guessedName}>
+                                      {guessedName?.split(' ')[0]}
+                                    </span>
+                                    <span className={`text-sm ${guess.isCorrect ? 'text-accent' : 'text-destructive'}`}>
+                                      {guess.isCorrect ? '✓' : '✗'}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </main>

@@ -78,8 +78,7 @@ export function SubmissionView({
           explicit: false,
           previewUrl: sub.preview_url,
           hasPreview: !!sub.preview_url,
-          audioFeatures: null,
-          isLikelyChristmas: false, // We don't store this, but it's fine
+          isLikelyChristmas: false,
           christmasKeywordMatches: [],
         }))
         setSubmittedFromDb(tracks)
@@ -261,6 +260,8 @@ export function SubmissionView({
       }
 
       // Insert all submissions with metadata for trivia
+      // Note: Audio features (tempo, danceability, energy, valence) are no longer available
+      // as Spotify deprecated the audio-features endpoint
       const submissions = selectedTracks.map((track, index) => ({
         participant_id: currentParticipant.id,
         track_id: track.id,
@@ -274,10 +275,6 @@ export function SubmissionView({
         release_year: track.releaseYear,
         duration_ms: track.durationMs,
         popularity: track.popularity,
-        tempo: track.audioFeatures?.tempo ?? null,
-        valence: track.audioFeatures?.valence ?? null,
-        danceability: track.audioFeatures?.danceability ?? null,
-        energy: track.audioFeatures?.energy ?? null,
       }))
 
       const { error: submissionError } = await supabase
@@ -451,18 +448,32 @@ export function SubmissionView({
                 </Card>
               )}
 
-              {/* Host can start quiz when all submitted */}
-              {isHost && allSubmitted && (
-                <Button
-                  onClick={onAllSubmitted}
-                  className="w-full h-12 text-lg"
-                  size="lg"
-                >
-                  Start Quiz!
-                </Button>
+              {/* Host can start quiz when at least 2 players have submitted */}
+              {isHost && submittedCount >= 2 && (
+                <div className="space-y-2">
+                  {!allSubmitted && (
+                    <p className="text-center text-sm text-amber-500">
+                      {participants.length - submittedCount} player{participants.length - submittedCount !== 1 ? 's' : ''} will be excluded from the quiz
+                    </p>
+                  )}
+                  <Button
+                    onClick={onAllSubmitted}
+                    className="w-full h-12 text-lg"
+                    size="lg"
+                    variant={allSubmitted ? 'default' : 'secondary'}
+                  >
+                    {allSubmitted ? 'Start Quiz!' : 'Start Quiz Anyway'}
+                  </Button>
+                </div>
               )}
 
-              {!isHost && allSubmitted && (
+              {isHost && submittedCount < 2 && (
+                <p className="text-center text-muted-foreground">
+                  Need at least 2 players to submit before starting...
+                </p>
+              )}
+
+              {!isHost && submittedCount >= 2 && (
                 <p className="text-center text-muted-foreground">
                   Waiting for host to start the quiz...
                 </p>
@@ -571,9 +582,6 @@ export function SubmissionView({
                         <p className="text-sm text-muted-foreground truncate">{track.artist}</p>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           {track.releaseYear && <span>{track.releaseYear}</span>}
-                          {track.audioFeatures && (
-                            <span>{Math.round(track.audioFeatures.tempo)} BPM</span>
-                          )}
                           {track.albumName && (
                             <span className="truncate max-w-32" title={track.albumName}>
                               {track.albumName}
