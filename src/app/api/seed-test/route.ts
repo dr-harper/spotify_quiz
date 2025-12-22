@@ -59,6 +59,7 @@ export async function POST() {
       .insert({
         room_code: TEST_ROOM_CODE,
         host_id: user.id,
+        name: 'Test Room',
         status: 'RESULTS',
       })
       .select()

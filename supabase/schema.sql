@@ -13,6 +13,7 @@ create table if not exists public.rooms (
   id uuid primary key default uuid_generate_v4(),
   room_code varchar(10) unique not null,
   host_id uuid not null,
+  name varchar(80),
   status varchar(20) not null default 'LOBBY'
     check (status in ('LOBBY', 'SUBMITTING', 'PLAYING', 'RESULTS')),
   current_round integer default 0,

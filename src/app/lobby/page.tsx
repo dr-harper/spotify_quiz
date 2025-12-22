@@ -3,9 +3,11 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
 import { createClient } from '@/lib/supabase/client'
 import { generateRoomCode } from '@/lib/utils'
+import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
@@ -20,6 +22,7 @@ export default function LobbyPage() {
   const [user, setUser] = useState<User | null>(null)
   const [userMeta, setUserMeta] = useState<{ name: string; avatar: string | null }>({ name: '', avatar: null })
   const [joinCode, setJoinCode] = useState('')
+  const [lobbyName, setLobbyName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [isJoining, setIsJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,6 +72,7 @@ export default function LobbyPage() {
     try {
       const roomCode = generateRoomCode()
       const spotifyId = user.user_metadata?.provider_id || user.id
+      const normalizedName = lobbyName.trim().replace(/\s+/g, ' ')
 
       // Create the room
       const { data: room, error: roomError } = await supabase
@@ -76,6 +80,7 @@ export default function LobbyPage() {
         .insert({
           room_code: roomCode,
           host_id: user.id,
+          name: normalizedName ? normalizedName : null,
           status: 'LOBBY',
         })
         .select()
@@ -182,7 +187,23 @@ export default function LobbyPage() {
             <CardTitle className="text-xl">Host a Game</CardTitle>
             <CardDescription>Create a new room and invite your friends</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="lobby-name" className="text-sm">Lobby name (optional)</Label>
+              <Input
+                id="lobby-name"
+                placeholder="e.g. Snowball Showdown"
+                value={lobbyName}
+                onChange={(e) => setLobbyName(e.target.value.slice(0, LOBBY_NAME_MAX_LENGTH))}
+                onBlur={() => setLobbyName((value) => value.trim())}
+                maxLength={LOBBY_NAME_MAX_LENGTH}
+                autoComplete="off"
+                disabled={isCreating}
+              />
+              <p className="text-xs text-muted-foreground text-right">
+                {lobbyName.trim().length}/{LOBBY_NAME_MAX_LENGTH} characters
+              </p>
+            </div>
             <Button
               onClick={handleCreateRoom}
               disabled={isCreating}
@@ -247,7 +268,14 @@ export default function LobbyPage() {
                   className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono font-bold text-sm">{room.room_code}</span>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-sm leading-tight">
+                        {room.name || 'Untitled lobby'}
+                      </span>
+                      <span className="font-mono font-bold text-xs text-muted-foreground">
+                        {room.room_code}
+                      </span>
+                    </div>
                     {isHost && (
                       <span className="text-xs text-primary">(Host)</span>
                     )}

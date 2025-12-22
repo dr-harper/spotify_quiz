@@ -30,6 +30,7 @@ export interface Room {
   id: string
   room_code: string
   host_id: string
+  name: string | null
   status: RoomStatus
   current_round: number
   settings: GameSettings | null

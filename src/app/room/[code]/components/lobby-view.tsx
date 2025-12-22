@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -8,9 +8,11 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Slider } from '@/components/ui/slider'
+import { Input } from '@/components/ui/input'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
 import type { Room, Participant, GameSettings } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
+import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 
 interface LobbyViewProps {
   room: Room
@@ -18,6 +20,7 @@ interface LobbyViewProps {
   currentParticipant: Participant
   onStartGame: () => void
   onUpdateSettings: (settings: GameSettings) => void
+  onUpdateRoomName: (name: string | null) => Promise<void> | void
 }
 
 export function LobbyView({
@@ -26,17 +29,27 @@ export function LobbyView({
   currentParticipant,
   onStartGame,
   onUpdateSettings,
+  onUpdateRoomName,
 }: LobbyViewProps) {
   const isHost = currentParticipant.is_host
   const [copied, setCopied] = useState(false)
+  const [roomNameInput, setRoomNameInput] = useState(room.name ?? '')
+  const [isSavingName, setIsSavingName] = useState(false)
   // Allow single player for testing (change to >= 2 for production)
   const canStart = participants.length >= 1
 
   const settings = room.settings || DEFAULT_GAME_SETTINGS
+  const displayName = room.name?.trim() || room.room_code
+
+  useEffect(() => {
+    setRoomNameInput(room.name ?? '')
+  }, [room.name])
 
   const copyRoomLink = () => {
     const url = `${window.location.origin}/room/${room.room_code}`
-    navigator.clipboard.writeText(url)
+    const inviteLabel = `${displayName} (${room.room_code})`
+    const inviteText = `${inviteLabel}\nJoin on Festive Frequencies: ${url}`
+    navigator.clipboard.writeText(inviteText)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -48,27 +61,82 @@ export function LobbyView({
     onUpdateSettings({ ...settings, [key]: value })
   }
 
+  const handleNameBlur = async () => {
+    if (!isHost) {
+      setRoomNameInput(room.name ?? '')
+      return
+    }
+
+    const normalized = roomNameInput.trim().replace(/\s+/g, ' ')
+    const limitedName = normalized ? normalized.slice(0, LOBBY_NAME_MAX_LENGTH) : ''
+
+    if (limitedName === (room.name ?? '')) {
+      setRoomNameInput(room.name ?? '')
+      return
+    }
+
+    try {
+      setIsSavingName(true)
+      await onUpdateRoomName(limitedName || null)
+      setRoomNameInput(limitedName)
+    } finally {
+      setIsSavingName(false)
+    }
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center p-4 pt-8">
       <div className="w-full max-w-md space-y-4">
         <GameBreadcrumbs currentStage="lobby" />
 
-        {/* Room Code Display */}
+        <div className="text-center space-y-1">
+          <p className="text-sm uppercase tracking-wide text-muted-foreground">Lobby</p>
+          <h1 className="text-3xl font-bold text-foreground">{displayName}</h1>
+          <p className="font-mono text-sm text-muted-foreground">Code: {room.room_code}</p>
+        </div>
+
+        {/* Lobby Details */}
         <Card className="border-2 border-primary/30 bg-card/50">
           <CardHeader className="text-center pb-2">
-            <CardTitle className="text-lg text-muted-foreground">Room Code</CardTitle>
+            <CardTitle className="text-lg text-muted-foreground">Lobby details & invites</CardTitle>
           </CardHeader>
-          <CardContent className="text-center">
-            <button
-              onClick={copyRoomLink}
-              className="text-4xl font-mono font-bold tracking-[0.3em] text-secondary hover:text-secondary/80 transition-colors"
-              title="Click to copy link"
-            >
-              {room.room_code}
-            </button>
-            <p className="text-xs text-muted-foreground mt-2">
-              {copied ? '✓ Link copied!' : 'Click to copy invite link'}
-            </p>
+          <CardContent className="space-y-4">
+            <div className="space-y-2 text-left">
+              <Label htmlFor="room-name" className="text-sm">Lobby name</Label>
+              <Input
+                id="room-name"
+                value={roomNameInput}
+                onChange={(e) => setRoomNameInput(e.target.value.slice(0, LOBBY_NAME_MAX_LENGTH))}
+                onBlur={handleNameBlur}
+                placeholder="Name your lobby"
+                disabled={!isHost || isSavingName}
+                maxLength={LOBBY_NAME_MAX_LENGTH}
+                autoComplete="off"
+              />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {isSavingName
+                    ? 'Saving lobby name...'
+                    : isHost
+                      ? 'Only the host can edit this name'
+                      : 'Only the host can edit this name'}
+                </span>
+                <span>{roomNameInput.trim().length}/{LOBBY_NAME_MAX_LENGTH}</span>
+              </div>
+            </div>
+
+            <div className="text-center space-y-2">
+              <button
+                onClick={copyRoomLink}
+                className="text-4xl font-mono font-bold tracking-[0.3em] text-secondary hover:text-secondary/80 transition-colors w-full"
+                title="Click to copy invite"
+              >
+                {room.room_code}
+              </button>
+              <p className="text-xs text-muted-foreground">
+                {copied ? `✓ Copied invite for "${displayName}"` : `Click to copy invite for "${displayName}"`}
+              </p>
+            </div>
           </CardContent>
         </Card>
 

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
 import type { Room, Participant, GameSettings } from '@/types/database'
+import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { LobbyView } from './components/lobby-view'
 import { SubmissionView } from './components/submission-view'
 import { QuizView } from './components/quiz-view'
@@ -175,6 +176,24 @@ export default function RoomPage() {
     }
   }
 
+  const updateRoomName = async (name: string | null) => {
+    if (!room || !currentParticipant?.is_host) return
+
+    const normalized = name?.trim().replace(/\s+/g, ' ') ?? ''
+    const limitedName = normalized ? normalized.slice(0, LOBBY_NAME_MAX_LENGTH) : null
+
+    const { error } = await supabase
+      .from('rooms')
+      .update({ name: limitedName, updated_at: new Date().toISOString() })
+      .eq('id', room.id)
+
+    if (error) {
+      console.error('Error updating room name:', error)
+    } else {
+      setRoom(prev => prev ? { ...prev, name: limitedName } : prev)
+    }
+  }
+
   if (isLoading) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-4">
@@ -212,6 +231,7 @@ export default function RoomPage() {
             currentParticipant={currentParticipant}
             onStartGame={() => updateRoomStatus('SUBMITTING')}
             onUpdateSettings={updateRoomSettings}
+            onUpdateRoomName={updateRoomName}
           />
         )
       case 'SUBMITTING':
