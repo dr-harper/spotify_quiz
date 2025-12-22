@@ -53,6 +53,11 @@ export function ResultsReveal({
 
   const allRounds = useMemo(() => [...part1Rounds, ...part2Rounds], [part1Rounds, part2Rounds])
 
+  // Check if trivia was actually played (has any non-zero scores)
+  const hasTriviaScores = useMemo(() => {
+    return Object.values(triviaScores).some(score => score > 0)
+  }, [triviaScores])
+
   // Calculate awards once
   useEffect(() => {
     const calculatedAwards = calculateAwards(participants, allRounds, triviaScores)
@@ -101,9 +106,17 @@ export function ResultsReveal({
       if (currentIndex < part1Rounds.length - 1) {
         setCurrentIndex(prev => prev + 1)
       } else {
-        // Move to trivia phase
-        setPhase('trivia')
-        setCurrentIndex(0)
+        // Move to trivia phase if trivia was played, otherwise skip to part2
+        if (hasTriviaScores) {
+          setPhase('trivia')
+          setCurrentIndex(0)
+        } else if (part2Rounds.length > 0) {
+          setPhase('part2')
+          setCurrentIndex(0)
+        } else {
+          // No trivia and no part2, go to winner
+          setPhase('winner')
+        }
       }
     } else if (phase === 'trivia') {
       // Add all trivia scores in one go
@@ -156,7 +169,7 @@ export function ResultsReveal({
         }
       }
     }
-  }, [phase, currentIndex, part1Rounds, part2Rounds, triviaScores, awards])
+  }, [phase, currentIndex, part1Rounds, part2Rounds, triviaScores, awards, hasTriviaScores])
 
   // Get current content based on phase
   const getCurrentContent = () => {
@@ -247,13 +260,14 @@ export function ResultsReveal({
     100
   )
 
-  // Progress calculation (songs + trivia + awards + winner)
-  const totalSteps = part1Rounds.length + 1 + part2Rounds.length + awards.length + 1
+  // Progress calculation (songs + trivia (if any) + awards + winner)
+  const triviaSteps = hasTriviaScores ? 1 : 0
+  const totalSteps = part1Rounds.length + triviaSteps + part2Rounds.length + awards.length + 1
   const currentStep =
     phase === 'part1' ? currentIndex + 1 :
     phase === 'trivia' ? part1Rounds.length + 1 :
-    phase === 'part2' ? part1Rounds.length + 1 + currentIndex + 1 :
-    part1Rounds.length + 1 + part2Rounds.length + visibleAwards + (phase === 'winner' ? 1 : 0)
+    phase === 'part2' ? part1Rounds.length + triviaSteps + currentIndex + 1 :
+    part1Rounds.length + triviaSteps + part2Rounds.length + visibleAwards + (phase === 'winner' ? 1 : 0)
 
   return (
     <div className="min-h-screen flex flex-col p-4">
