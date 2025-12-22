@@ -83,21 +83,21 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 relative">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 py-6 relative">
       <FestiveBackground />
 
       <Card className="w-full max-w-md border-2 border-primary/20 shadow-xl shadow-primary/10 relative z-10 bg-card/95 backdrop-blur-sm">
-        <CardHeader className="text-center space-y-4">
-          <div className="text-6xl mb-2 animate-bounce">🎵</div>
-          <CardTitle className="text-4xl font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
+        <CardHeader className="text-center space-y-2 sm:space-y-4 pb-2 sm:pb-6">
+          <div className="text-4xl sm:text-6xl mb-1 sm:mb-2 animate-bounce">🎵</div>
+          <CardTitle className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
             Festive Frequencies
           </CardTitle>
-          <CardDescription className="text-lg text-muted-foreground">
+          <CardDescription className="text-base sm:text-lg text-muted-foreground">
             The Christmas music guessing game
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="text-center space-y-4 text-sm text-muted-foreground">
+        <CardContent className="space-y-4 sm:space-y-6">
+          <div className="text-center space-y-2 sm:space-y-4 text-sm text-muted-foreground">
             <p>
               <span className="text-secondary font-semibold">1.</span> Join a room with friends
             </p>
@@ -145,7 +145,7 @@ export default function Home() {
               <Button
                 onClick={handleSpotifyLogin}
                 disabled={isLoading}
-                className="w-full h-14 text-lg font-semibold bg-[#1DB954] hover:bg-[#1ed760] text-white"
+                className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold bg-[#1DB954] hover:bg-[#1ed760] text-white"
               >
                 {isLoading ? (
                   <span className="flex items-center gap-2">
@@ -190,7 +190,7 @@ export default function Home() {
               <Button
                 variant="outline"
                 onClick={() => setShowGuestForm(true)}
-                className="w-full h-12"
+                className="w-full h-10 sm:h-12"
               >
                 Continue as Guest
               </Button>

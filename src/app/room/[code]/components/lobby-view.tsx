@@ -38,7 +38,7 @@ export function LobbyView({
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4">
+    <main className="flex min-h-screen flex-col items-center p-4 pt-8">
       <div className="w-full max-w-md space-y-6">
         <GameBreadcrumbs currentStage="lobby" />
 
