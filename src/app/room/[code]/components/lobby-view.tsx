@@ -47,8 +47,11 @@ export function LobbyView({
 
   const copyRoomLink = () => {
     const url = `${window.location.origin}/room/${room.room_code}`
-    const inviteLabel = `${displayName} (${room.room_code})`
-    const inviteText = `${inviteLabel}\nJoin on Festive Frequencies: ${url}`
+    const inviteText = `🎵 ${displayName}
+
+Pick your favourite songs, we'll shuffle them into a playlist, then guess who chose what!
+
+Join: ${url}`
     navigator.clipboard.writeText(inviteText)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)

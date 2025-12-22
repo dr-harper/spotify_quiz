@@ -148,7 +148,7 @@ function HomeContent() {
             Festive Frequencies
           </CardTitle>
           <CardDescription className="text-base sm:text-lg text-muted-foreground">
-            The Christmas music guessing game
+            Build a playlist together. Guess who picked what.
           </CardDescription>
           {joinCode && (
             <div className="mt-3 p-3 bg-secondary/20 rounded-lg border border-secondary/30">
@@ -168,16 +168,29 @@ function HomeContent() {
           )}
         </CardHeader>
         <CardContent className="space-y-4 sm:space-y-6">
-          <div className="text-center space-y-2 sm:space-y-4 text-sm text-muted-foreground">
-            <p>
-              <span className="text-secondary font-semibold">1.</span> Join a room with friends
-            </p>
-            <p>
-              <span className="text-secondary font-semibold">2.</span> Each person picks 10 songs
-            </p>
-            <p>
-              <span className="text-secondary font-semibold">3.</span> Guess who gifted each tune!
-            </p>
+          {/* How it works */}
+          <div className="space-y-3 text-sm">
+            <div className="flex gap-3 items-start">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-secondary/20 text-secondary flex items-center justify-center text-xs font-bold">1</span>
+              <div>
+                <p className="font-medium text-foreground">Everyone picks songs</p>
+                <p className="text-muted-foreground text-xs">Each player secretly chooses their favourite tracks</p>
+              </div>
+            </div>
+            <div className="flex gap-3 items-start">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-secondary/20 text-secondary flex items-center justify-center text-xs font-bold">2</span>
+              <div>
+                <p className="font-medium text-foreground">Songs get shuffled into a playlist</p>
+                <p className="text-muted-foreground text-xs">All the picks combine into one collaborative mix</p>
+              </div>
+            </div>
+            <div className="flex gap-3 items-start">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-secondary/20 text-secondary flex items-center justify-center text-xs font-bold">3</span>
+              <div>
+                <p className="font-medium text-foreground">Guess who picked each song</p>
+                <p className="text-muted-foreground text-xs">Listen together and score points for correct guesses</p>
+              </div>
+            </div>
           </div>
 
           {/* Guest Login Form */}

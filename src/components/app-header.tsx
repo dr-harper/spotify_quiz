@@ -195,20 +195,20 @@ export function AppHeader() {
             <DialogDescription asChild>
               <div className="space-y-4 pt-4">
                 <p>
-                  A Christmas music quiz game where friends pick songs and guess who gifted each tune!
+                  Build a collaborative playlist with friends, then play a guessing game to see who knows each other&apos;s music taste best!
                 </p>
                 <div className="space-y-2 text-sm">
-                  <p><strong>How to play:</strong></p>
+                  <p><strong>How it works:</strong></p>
                   <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                    <li>Create or join a room with friends</li>
-                    <li>Each player picks 10 songs</li>
-                    <li>Listen to each song and guess who picked it</li>
-                    <li>Score points for correct guesses!</li>
+                    <li>Everyone secretly picks their favourite songs</li>
+                    <li>All songs get shuffled into one shared playlist</li>
+                    <li>Listen together and guess who picked each track</li>
+                    <li>Score points for knowing your friends&apos; taste!</li>
                   </ol>
                 </div>
                 <div className="pt-2 text-xs text-muted-foreground">
-                  <p>Playlists are sorted by AI for optimal energy flow.</p>
-                  <p className="mt-2">Made with festive cheer.</p>
+                  <p>Save the playlist to Spotify when you&apos;re done.</p>
+                  <p className="mt-2">Made with festive cheer 🎄</p>
                 </div>
               </div>
             </DialogDescription>
