@@ -15,7 +15,7 @@ export interface GameSettings {
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   songsRequired: 10,
-  christmasSongsRequired: 0,
+  christmasSongsRequired: 3,
   chameleonMode: false,
   guessTimerSeconds: null,
   previewLengthSeconds: 30,
