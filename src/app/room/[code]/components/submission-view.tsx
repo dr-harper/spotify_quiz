@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -51,7 +51,58 @@ export function SubmissionView({
   const [validationError, setValidationError] = useState<string | null>(null)
   const [submittedFromDb, setSubmittedFromDb] = useState<Track[]>([])
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = createClient()
+
+  // localStorage key for draft persistence
+  const DRAFT_KEY = `festive-frequencies-draft-${room.id}`
+
+  // Load draft from localStorage on mount
+  useEffect(() => {
+    if (currentParticipant.has_submitted) return
+
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY)
+      if (saved) {
+        const draft = JSON.parse(saved) as Track[]
+        if (Array.isArray(draft) && draft.length > 0) {
+          setSelectedTracks(draft)
+        }
+      }
+    } catch {
+      // Invalid data in localStorage, ignore
+    }
+  }, [DRAFT_KEY, currentParticipant.has_submitted])
+
+  // Save draft to localStorage when selections change
+  useEffect(() => {
+    if (currentParticipant.has_submitted) return
+
+    if (selectedTracks.length > 0) {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(selectedTracks))
+    } else {
+      localStorage.removeItem(DRAFT_KEY)
+    }
+  }, [selectedTracks, DRAFT_KEY, currentParticipant.has_submitted])
+
+  // Clear draft after successful submission
+  const clearDraft = useCallback(() => {
+    localStorage.removeItem(DRAFT_KEY)
+  }, [DRAFT_KEY])
+
+  // Warn before leaving with unsaved selections
+  useEffect(() => {
+    if (currentParticipant.has_submitted || selectedTracks.length === 0) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+      return ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [selectedTracks.length, currentParticipant.has_submitted])
 
   // Fetch submitted songs from database (for page refresh persistence)
   useEffect(() => {
@@ -140,12 +191,16 @@ export function SubmissionView({
     checkSpotify()
   }, [])
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return
+  // Perform the actual search
+  const performSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([])
+      return
+    }
     setIsSearching(true)
 
     try {
-      const response = await fetch(`/api/spotify/search?q=${encodeURIComponent(searchQuery)}`)
+      const response = await fetch(`/api/spotify/search?q=${encodeURIComponent(query)}`)
       const data = await response.json()
       if (data.tracks) {
         // Filter out already selected tracks
@@ -159,6 +214,39 @@ export function SubmissionView({
     } finally {
       setIsSearching(false)
     }
+  }, [selectedTracks])
+
+  // Debounced search - triggers automatically as user types
+  useEffect(() => {
+    // Clear any existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    // Don't search if query is empty or too short
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      if (!searchQuery.trim()) setSearchResults([])
+      return
+    }
+
+    // Set up debounced search (400ms delay)
+    searchTimeoutRef.current = setTimeout(() => {
+      performSearch(searchQuery)
+    }, 400)
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [searchQuery, performSearch])
+
+  // Manual search (for Enter key or button click)
+  const handleSearch = () => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    performSearch(searchQuery)
   }
 
   const handleSelectTrack = (track: Track) => {
@@ -294,6 +382,7 @@ export function SubmissionView({
 
       if (updateError) throw updateError
 
+      clearDraft()
       setHasSubmitted(true)
     } catch (error: unknown) {
       const err = error as { message?: string; details?: string; hint?: string }
@@ -521,16 +610,23 @@ export function SubmissionView({
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
-                  placeholder="Search for a song..."
+                  placeholder="Start typing to search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   className="flex-1"
                 />
-                <Button onClick={handleSearch} disabled={isSearching}>
-                  {isSearching ? 'Searching...' : 'Search'}
+                <Button
+                  onClick={handleSearch}
+                  disabled={isSearching || !searchQuery.trim()}
+                  variant="outline"
+                >
+                  {isSearching ? '...' : 'Search'}
                 </Button>
               </div>
+              {searchQuery.trim().length > 0 && searchQuery.trim().length < 2 && (
+                <p className="text-xs text-muted-foreground">Type at least 2 characters to search</p>
+              )}
 
               {/* Search Results */}
               {searchResults.length > 0 && (
@@ -607,9 +703,14 @@ export function SubmissionView({
                 </div>
               )}
 
-              {searchResults.length === 0 && !isSearching && (
+              {searchResults.length === 0 && !isSearching && !searchQuery.trim() && (
                 <p className="text-center text-muted-foreground py-8">
-                  Search for songs to add to your selection
+                  Start typing to search for songs
+                </p>
+              )}
+              {searchResults.length === 0 && !isSearching && searchQuery.trim().length >= 2 && (
+                <p className="text-center text-muted-foreground py-8">
+                  No results found for &quot;{searchQuery}&quot;
                 </p>
               )}
             </CardContent>
