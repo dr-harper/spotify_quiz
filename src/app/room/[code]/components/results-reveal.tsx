@@ -16,6 +16,30 @@ interface RoundDetail {
   correctVoters: Participant[]
 }
 
+// Chameleon scoring constants
+const CHAMELEON_BONUS_PER_WRONG_GUESS = 75  // Bonus for each player you fooled
+const CHAMELEON_PENALTY_PER_CORRECT_GUESS = 50  // Penalty for each player who caught you
+
+// Calculate chameleon points for a round
+function calculateChameleonPoints(
+  round: RoundDetail,
+  totalSubmittedParticipants: number
+): { ownerId: string; points: number; wrongGuesses: number; correctGuesses: number } | null {
+  if (!round.submission.is_chameleon) return null
+
+  const ownerId = round.correctParticipant.id
+  const correctGuesses = round.correctVoters.length
+  // Potential voters = all participants except the owner (who can't vote on their own song)
+  const potentialVoters = totalSubmittedParticipants - 1
+  const wrongGuesses = potentialVoters - correctGuesses
+
+  const bonus = wrongGuesses * CHAMELEON_BONUS_PER_WRONG_GUESS
+  const penalty = correctGuesses * CHAMELEON_PENALTY_PER_CORRECT_GUESS
+  const points = bonus - penalty
+
+  return { ownerId, points, wrongGuesses, correctGuesses }
+}
+
 interface ResultsRevealProps {
   participants: Participant[]
   part1Rounds: RoundDetail[]
@@ -74,6 +98,12 @@ export function ResultsReveal({
       round.correctVoters.forEach(voter => {
         scores[voter.id] = (scores[voter.id] || 0) + 100
       })
+
+      // Add chameleon scoring
+      const chameleonResult = calculateChameleonPoints(round, participants.length)
+      if (chameleonResult) {
+        scores[chameleonResult.ownerId] = (scores[chameleonResult.ownerId] || 0) + chameleonResult.points
+      }
     })
 
     // Add trivia scores
@@ -109,9 +139,15 @@ export function ResultsReveal({
       if (round) {
         setLiveScores(prev => {
           const next = { ...prev }
+          // Regular scoring for correct guesses
           round.correctVoters.forEach(voter => {
             next[voter.id] = (next[voter.id] || 0) + 100
           })
+          // Chameleon scoring
+          const chameleonResult = calculateChameleonPoints(round, participants.length)
+          if (chameleonResult) {
+            next[chameleonResult.ownerId] = (next[chameleonResult.ownerId] || 0) + chameleonResult.points
+          }
           return next
         })
       }
@@ -148,9 +184,15 @@ export function ResultsReveal({
       if (round) {
         setLiveScores(prev => {
           const next = { ...prev }
+          // Regular scoring for correct guesses
           round.correctVoters.forEach(voter => {
             next[voter.id] = (next[voter.id] || 0) + 100
           })
+          // Chameleon scoring
+          const chameleonResult = calculateChameleonPoints(round, participants.length)
+          if (chameleonResult) {
+            next[chameleonResult.ownerId] = (next[chameleonResult.ownerId] || 0) + chameleonResult.points
+          }
           return next
         })
       }
@@ -182,13 +224,14 @@ export function ResultsReveal({
         }
       }
     }
-  }, [phase, currentIndex, part1Rounds, part2Rounds, triviaScores, awards, hasTriviaScores])
+  }, [phase, currentIndex, part1Rounds, part2Rounds, triviaScores, awards, hasTriviaScores, participants])
 
   // Get current content based on phase
   const getCurrentContent = () => {
     if (phase === 'part1') {
       const round = part1Rounds[currentIndex]
       if (!round) return null
+      const chameleonResult = calculateChameleonPoints(round, participants.length)
       return (
         <SongRevealCard
           submission={round.submission}
@@ -198,6 +241,7 @@ export function ResultsReveal({
           totalRounds={part1Rounds.length}
           phase="part1"
           onAudioEnd={isAutoPlaying ? advanceToNext : undefined}
+          chameleonResult={chameleonResult}
         />
       )
     }
@@ -236,6 +280,7 @@ export function ResultsReveal({
     if (phase === 'part2') {
       const round = part2Rounds[currentIndex]
       if (!round) return null
+      const chameleonResult = calculateChameleonPoints(round, participants.length)
       return (
         <SongRevealCard
           submission={round.submission}
@@ -245,6 +290,7 @@ export function ResultsReveal({
           totalRounds={part2Rounds.length}
           phase="part2"
           onAudioEnd={isAutoPlaying ? advanceToNext : undefined}
+          chameleonResult={chameleonResult}
         />
       )
     }

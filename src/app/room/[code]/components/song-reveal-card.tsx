@@ -14,6 +14,7 @@ interface SongRevealCardProps {
   totalRounds: number
   phase: 'part1' | 'part2'
   onAudioEnd?: () => void
+  chameleonResult?: { points: number; wrongGuesses: number; correctGuesses: number } | null
 }
 
 const PLAYER_COLOURS = [
@@ -29,6 +30,7 @@ export function SongRevealCard({
   totalRounds,
   phase,
   onAudioEnd,
+  chameleonResult,
 }: SongRevealCardProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -135,10 +137,38 @@ export function SongRevealCard({
                   </AvatarFallback>
                 </Avatar>
                 <span className="font-semibold text-sm">{pickedBy.display_name}</span>
+                {submission.is_chameleon && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-gradient-to-r from-green-500/20 to-yellow-500/20">
+                    🦎 Chameleon
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
         </div>
+
+        {/* Chameleon Result */}
+        {chameleonResult && (
+          <div className="mt-3 p-3 rounded-lg bg-gradient-to-r from-green-500/10 to-yellow-500/10 border border-green-500/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🦎</span>
+                <span className="text-sm font-medium">{pickedBy.display_name}&apos;s chameleon song</span>
+              </div>
+              <Badge
+                variant={chameleonResult.points >= 0 ? "secondary" : "destructive"}
+                className="text-sm"
+              >
+                {chameleonResult.points >= 0 ? '+' : ''}{chameleonResult.points}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {chameleonResult.wrongGuesses > 0 && `Fooled ${chameleonResult.wrongGuesses} player${chameleonResult.wrongGuesses > 1 ? 's' : ''}`}
+              {chameleonResult.wrongGuesses > 0 && chameleonResult.correctGuesses > 0 && ' • '}
+              {chameleonResult.correctGuesses > 0 && `Caught by ${chameleonResult.correctGuesses}`}
+            </p>
+          </div>
+        )}
 
         {/* Correct Guessers */}
         <div className="mt-4 pt-4 border-t">

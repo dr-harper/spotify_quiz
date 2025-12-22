@@ -101,7 +101,7 @@ export function GameSettingsModal({
             <div className="space-y-0.5">
               <Label>Chameleon Mode</Label>
               <p className="text-xs text-muted-foreground">
-                Pick 1 song you think others will also pick
+                Pick one song disguised as someone else&apos;s taste - score if they guess wrong!
               </p>
             </div>
             <Switch

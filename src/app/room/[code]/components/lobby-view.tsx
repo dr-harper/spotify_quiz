@@ -229,20 +229,24 @@ Join: ${url}`
               <>
                 {/* Songs Required */}
                 <div className="space-y-2">
-                  <Label className="text-sm">Songs per player</Label>
-                  <div className="flex gap-2">
-                    {([5, 10, 15] as const).map(num => (
-                      <Button
-                        key={num}
-                        variant={settings.songsRequired === num ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => updateSetting('songsRequired', num)}
-                        className="flex-1"
-                      >
-                        {num}
-                      </Button>
-                    ))}
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Songs per player</Label>
+                    <span className="text-sm font-medium">{settings.songsRequired}</span>
                   </div>
+                  <Slider
+                    value={[settings.songsRequired]}
+                    onValueChange={([value]) => {
+                      updateSetting('songsRequired', value)
+                      // Ensure Christmas requirement doesn't exceed songs required
+                      if (settings.christmasSongsRequired > value) {
+                        updateSetting('christmasSongsRequired', value)
+                      }
+                    }}
+                    max={20}
+                    min={1}
+                    step={1}
+                    className="w-full"
+                  />
                 </div>
 
                 {/* Christmas Songs Required */}
@@ -308,33 +312,45 @@ Join: ${url}`
                 </div>
 
                 {/* Toggle Options */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Chameleon Mode</Label>
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Chameleon Mode</Label>
+                      <p className="text-xs text-muted-foreground">Pick one song disguised as someone else&apos;s taste - score if they guess wrong!</p>
+                    </div>
                     <Switch
                       checked={settings.chameleonMode}
                       onCheckedChange={(checked) => updateSetting('chameleonMode', checked)}
                     />
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Reveal answers after each round</Label>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Reveal after each round</Label>
+                      <p className="text-xs text-muted-foreground">Show who picked each song immediately after guessing</p>
+                    </div>
                     <Switch
                       checked={settings.revealAfterEachRound}
                       onCheckedChange={(checked) => updateSetting('revealAfterEachRound', checked)}
                     />
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Allow duplicate songs</Label>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Allow duplicate songs</Label>
+                      <p className="text-xs text-muted-foreground">Multiple players can pick the same song</p>
+                    </div>
                     <Switch
                       checked={settings.allowDuplicateSongs}
                       onCheckedChange={(checked) => updateSetting('allowDuplicateSongs', checked)}
                     />
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Trivia round</Label>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Trivia round</Label>
+                      <p className="text-xs text-muted-foreground">Music trivia questions between song rounds</p>
+                    </div>
                     <Switch
                       checked={settings.triviaEnabled}
                       onCheckedChange={(checked) => updateSetting('triviaEnabled', checked)}

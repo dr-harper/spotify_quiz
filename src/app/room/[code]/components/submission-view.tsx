@@ -39,6 +39,7 @@ export function SubmissionView({
   const settings = room.settings || DEFAULT_GAME_SETTINGS
   const REQUIRED_SONGS = settings.songsRequired
   const REQUIRED_CHRISTMAS = settings.christmasSongsRequired || 0
+  const CHAMELEON_MODE = settings.chameleonMode || false
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Track[]>([])
   const [selectedTracks, setSelectedTracks] = useState<Track[]>([])
@@ -50,6 +51,10 @@ export function SubmissionView({
   const [christmasValidation, setChristmasValidation] = useState<ChristmasValidation>({})
   const [validationError, setValidationError] = useState<string | null>(null)
   const [submittedFromDb, setSubmittedFromDb] = useState<Track[]>([])
+  const [chameleonTrackId, setChameleonTrackId] = useState<string | null>(null)
+  const [christmasOverrides, setChristmasOverrides] = useState<Record<string, boolean>>({})
+  const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = createClient()
@@ -131,6 +136,7 @@ export function SubmissionView({
           hasPreview: !!sub.preview_url,
           isLikelyChristmas: false,
           christmasKeywordMatches: [],
+          isChameleon: sub.is_chameleon || false,
         }))
         setSubmittedFromDb(tracks)
       }
@@ -139,14 +145,21 @@ export function SubmissionView({
     fetchSubmissions()
   }, [currentParticipant.has_submitted, currentParticipant.id, supabase])
 
-  // Count Christmas songs (using keyword heuristic + AI validation)
-  const christmasSongCount = selectedTracks.filter(track => {
+  // Check if a track is marked as Christmas (respects user overrides)
+  const isTrackChristmas = (track: Track): boolean => {
+    // User override takes priority
+    if (christmasOverrides[track.id] !== undefined) {
+      return christmasOverrides[track.id]
+    }
+    // Then AI validation
     const validation = christmasValidation[track.id]
-    // If validated by AI, use that result
     if (validation?.validated) return validation.isChristmasSong
     // Otherwise fall back to keyword detection
     return track.isLikelyChristmas
-  }).length
+  }
+
+  // Count Christmas songs
+  const christmasSongCount = selectedTracks.filter(isTrackChristmas).length
 
   const meetsChristmasRequirement = christmasSongCount >= REQUIRED_CHRISTMAS
 
@@ -257,7 +270,61 @@ export function SubmissionView({
 
   const handleRemoveTrack = (trackId: string) => {
     setSelectedTracks(selectedTracks.filter(t => t.id !== trackId))
+    // Clear chameleon if this track was marked
+    if (chameleonTrackId === trackId) {
+      setChameleonTrackId(null)
+    }
   }
+
+  const toggleChameleon = (trackId: string) => {
+    setChameleonTrackId(prev => prev === trackId ? null : trackId)
+  }
+
+  const toggleChristmas = (track: Track) => {
+    const currentValue = isTrackChristmas(track)
+    setChristmasOverrides(prev => ({
+      ...prev,
+      [track.id]: !currentValue,
+    }))
+  }
+
+  const hasChameleonSelected = chameleonTrackId !== null
+
+  // Fetch AI summary when all songs are selected
+  useEffect(() => {
+    if (selectedTracks.length !== REQUIRED_SONGS) {
+      setAiSummary(null)
+      return
+    }
+
+    const fetchSummary = async () => {
+      setIsLoadingSummary(true)
+      try {
+        const response = await fetch('/api/summarise-picks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tracks: selectedTracks.map(t => ({
+              name: t.name,
+              artist: t.artist,
+              albumName: t.albumName,
+              releaseYear: t.releaseYear,
+              isChristmas: isTrackChristmas(t),
+            })),
+            playerName: currentParticipant.display_name,
+          }),
+        })
+        const data = await response.json()
+        setAiSummary(data.summary || null)
+      } catch (error) {
+        console.error('Summary error:', error)
+      } finally {
+        setIsLoadingSummary(false)
+      }
+    }
+
+    fetchSummary()
+  }, [selectedTracks.length, REQUIRED_SONGS, currentParticipant.display_name])
 
   // Validate songs with Gemini AI
   const validateWithGemini = async (): Promise<boolean> => {
@@ -324,12 +391,18 @@ export function SubmissionView({
 
   const handleSubmit = async () => {
     if (selectedTracks.length !== REQUIRED_SONGS) return
-    if (isSubmitting || isValidating) return // Prevent double-click
+    if (isSubmitting) return // Prevent double-click
 
-    // Validate Christmas songs if required
-    if (REQUIRED_CHRISTMAS > 0) {
-      const isValid = await validateWithGemini()
-      if (!isValid) return
+    // Validate chameleon song if in chameleon mode
+    if (CHAMELEON_MODE && !hasChameleonSelected) {
+      setValidationError('Please mark one song as your chameleon pick (disguised as someone else\'s taste)')
+      return
+    }
+
+    // Validate Christmas songs requirement
+    if (REQUIRED_CHRISTMAS > 0 && !meetsChristmasRequirement) {
+      setValidationError(`You need at least ${REQUIRED_CHRISTMAS} Christmas songs (currently ${christmasSongCount}). Use the 🎄 button to mark songs as festive.`)
+      return
     }
 
     setIsSubmitting(true)
@@ -363,6 +436,8 @@ export function SubmissionView({
         release_year: track.releaseYear,
         duration_ms: track.durationMs,
         popularity: track.popularity,
+        // Chameleon mode
+        is_chameleon: CHAMELEON_MODE && track.id === chameleonTrackId,
       }))
 
       const { error: submissionError } = await supabase
@@ -394,6 +469,37 @@ export function SubmissionView({
 
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false)
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+
+  const handleEditSubmission = async () => {
+    setIsEditing(true)
+    try {
+      // Delete existing submissions
+      await supabase
+        .from('submissions')
+        .delete()
+        .eq('participant_id', currentParticipant.id)
+
+      // Mark participant as not submitted
+      await supabase
+        .from('participants')
+        .update({ has_submitted: false })
+        .eq('id', currentParticipant.id)
+
+      // Reset local state - keep the tracks so they can modify
+      if (submittedFromDb.length > 0) {
+        setSelectedTracks(submittedFromDb)
+      }
+      setHasSubmitted(false)
+      setChameleonTrackId(null)
+      setChristmasOverrides({})
+      setAiSummary(null)
+    } catch (error) {
+      console.error('Error editing submission:', error)
+    } finally {
+      setIsEditing(false)
+    }
+  }
 
   const handleCreatePlaylist = async () => {
     setIsCreatingPlaylist(true)
@@ -426,83 +532,81 @@ export function SubmissionView({
     const submittedSongs = selectedTracks.length > 0 ? selectedTracks : submittedFromDb
 
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-6">
-          <GameBreadcrumbs
-            currentStage="submitting"
-            canNavigate={isHost}
-            onNavigate={(stage) => stage === 'lobby' && onNavigateToLobby()}
-          />
-          <Card className="border-2 border-accent/30">
-            <CardHeader className="text-center">
-              <div className="text-5xl mb-4">🎄</div>
-              <CardTitle className="text-2xl">Songs Submitted!</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Show submitted songs */}
-              {submittedSongs.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Your picks:</p>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {submittedSongs.map((track, index) => (
-                      <div
-                        key={track.id}
-                        className="flex items-center gap-2 p-2 rounded-lg bg-muted/50"
-                      >
-                        <span className="text-sm text-muted-foreground w-5">{index + 1}.</span>
-                        {track.albumArt && (
-                          <img
-                            src={track.albumArt}
-                            alt=""
-                            className="w-8 h-8 rounded flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{track.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
+      <main className="flex min-h-screen flex-col items-center p-4 pt-8">
+        <div className="w-full max-w-4xl">
+          <div className="max-w-md mx-auto lg:max-w-none">
+            <GameBreadcrumbs
+              currentStage="submitting"
+              canNavigate={isHost}
+              onNavigate={(stage) => stage === 'lobby' && onNavigateToLobby()}
+            />
+          </div>
+
+          <div className="text-center space-y-1 my-6">
+            <div className="text-4xl mb-2">🎄</div>
+            <h1 className="text-2xl font-bold text-foreground">Songs Submitted!</h1>
+            <p className="text-sm text-muted-foreground">
+              {allSubmitted ? 'Everyone is ready!' : 'Waiting for other players...'}
+            </p>
+          </div>
+
+          {/* Two-column layout on larger screens */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-md mx-auto lg:max-w-none">
+            {/* Left Column - Your Picks */}
+            <div className="space-y-4">
+              <Card className="border-2 border-primary/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center justify-between">
+                    Your Picks
+                    <Badge variant="secondary">{submittedSongs.length} songs</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {submittedSongs.length > 0 && (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {submittedSongs.map((track, index) => (
+                        <div
+                          key={track.id}
+                          className={`flex items-center gap-2 p-2 rounded-lg ${
+                            isTrackChristmas(track) ? 'bg-green-500/10' : 'bg-muted/50'
+                          }`}
+                        >
+                          <span className="text-sm text-muted-foreground w-5">{index + 1}.</span>
+                          {track.albumArt && (
+                            <img
+                              src={track.albumArt}
+                              alt=""
+                              className="w-10 h-10 rounded flex-shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{track.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
+                          </div>
+                          {isTrackChristmas(track) && (
+                            <span className="text-sm" title="Christmas song">🎄</span>
+                          )}
+                          {(track.isChameleon || chameleonTrackId === track.id) && (
+                            <span className="text-sm" title="Chameleon pick">🦎</span>
+                          )}
                         </div>
-                        {track.isLikelyChristmas && (
-                          <span className="text-sm">🎄</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      ))}
+                    </div>
+                  )}
 
-              {!allSubmitted && (
-                <p className="text-center text-muted-foreground">
-                  Waiting for other players...
-                </p>
-              )}
+                  <Button
+                    variant="secondary"
+                    onClick={handleEditSubmission}
+                    disabled={isEditing}
+                    className="w-full"
+                  >
+                    {isEditing ? 'Loading...' : '✏️ Edit My Picks'}
+                  </Button>
+                </CardContent>
+              </Card>
 
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span>Players submitted</span>
-                  <span className="font-semibold">{submittedCount}/{participants.length}</span>
-                </div>
-                <Progress value={(submittedCount / participants.length) * 100} />
-              </div>
-
-              <div className="space-y-2">
-                {participants.map(p => (
-                  <div key={p.id} className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={p.avatar_url || undefined} />
-                      <AvatarFallback>{p.display_name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <span className="flex-1 text-sm">{p.display_name}</span>
-                    {p.has_submitted ? (
-                      <Badge variant="default" className="bg-accent">Done</Badge>
-                    ) : (
-                      <Badge variant="outline">Picking...</Badge>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Save Playlist Option */}
-              {allSubmitted && (
+              {/* Save Playlist Option - shown on mobile */}
+              <div className="lg:hidden">
                 <Card className="border border-secondary/30">
                   <CardContent className="pt-4">
                     {playlistUrl ? (
@@ -535,40 +639,129 @@ export function SubmissionView({
                     )}
                   </CardContent>
                 </Card>
-              )}
+              </div>
+            </div>
 
-              {/* Host can start quiz when at least 2 players have submitted */}
-              {isHost && submittedCount >= 2 && (
-                <div className="space-y-2">
-                  {!allSubmitted && (
-                    <p className="text-center text-sm text-amber-500">
-                      {participants.length - submittedCount} player{participants.length - submittedCount !== 1 ? 's' : ''} will be excluded from the quiz
+            {/* Right Column - Players Status */}
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center justify-between">
+                    Players
+                    <Badge variant={allSubmitted ? 'default' : 'secondary'}>
+                      {submittedCount}/{participants.length} ready
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Progress value={(submittedCount / participants.length) * 100} />
+
+                  <div className="space-y-2">
+                    {participants.map(p => (
+                      <div
+                        key={p.id}
+                        className={`flex items-center gap-3 p-2 rounded-lg ${
+                          p.id === currentParticipant.id
+                            ? 'bg-primary/10 border border-primary/20'
+                            : ''
+                        }`}
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={p.avatar_url || undefined} />
+                          <AvatarFallback>{p.display_name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <span className="flex-1 text-sm font-medium">
+                          {p.display_name}
+                          {p.id === currentParticipant.id && (
+                            <span className="text-muted-foreground text-xs ml-2">(You)</span>
+                          )}
+                        </span>
+                        {p.has_submitted ? (
+                          <Badge variant="default" className="bg-accent">Ready</Badge>
+                        ) : (
+                          <Badge variant="outline" className="animate-pulse">Picking...</Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Save Playlist Option - shown on desktop */}
+              <div className="hidden lg:block">
+                <Card className="border border-secondary/30">
+                  <CardContent className="pt-4">
+                    {playlistUrl ? (
+                      <div className="text-center space-y-2">
+                        <p className="text-accent text-sm font-semibold">Playlist created!</p>
+                        <Button
+                          asChild
+                          size="sm"
+                          className="w-full bg-[#1DB954] hover:bg-[#1ed760] text-white"
+                        >
+                          <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
+                            Open in Spotify
+                          </a>
+                        </Button>
+                      </div>
+                    ) : hasSpotify ? (
+                      <Button
+                        onClick={handleCreatePlaylist}
+                        disabled={isCreatingPlaylist}
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                      >
+                        {isCreatingPlaylist ? 'Creating...' : 'Save Songs to Playlist'}
+                      </Button>
+                    ) : (
+                      <p className="text-center text-xs text-muted-foreground">
+                        Connect Spotify from the menu to save playlists
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Continue / Start Quiz Button */}
+              <div className="space-y-2">
+                {isHost && submittedCount >= 2 && (
+                  <>
+                    {!allSubmitted && (
+                      <p className="text-center text-sm text-amber-500">
+                        {participants.length - submittedCount} player{participants.length - submittedCount !== 1 ? 's' : ''} will be excluded
+                      </p>
+                    )}
+                    <Button
+                      onClick={onAllSubmitted}
+                      className="w-full h-14 text-lg"
+                      size="lg"
+                    >
+                      {allSubmitted ? 'Continue to Quiz →' : 'Start Quiz Anyway →'}
+                    </Button>
+                  </>
+                )}
+
+                {isHost && submittedCount < 2 && (
+                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                    <p className="text-muted-foreground">
+                      Need at least 2 players to continue
                     </p>
-                  )}
-                  <Button
-                    onClick={onAllSubmitted}
-                    className="w-full h-12 text-lg"
-                    size="lg"
-                    variant={allSubmitted ? 'default' : 'secondary'}
-                  >
-                    {allSubmitted ? 'Start Quiz!' : 'Start Quiz Anyway'}
-                  </Button>
-                </div>
-              )}
+                  </div>
+                )}
 
-              {isHost && submittedCount < 2 && (
-                <p className="text-center text-muted-foreground">
-                  Need at least 2 players to submit before starting...
-                </p>
-              )}
-
-              {!isHost && submittedCount >= 2 && (
-                <p className="text-center text-muted-foreground">
-                  Waiting for host to start the quiz...
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                {!isHost && (
+                  <div className="text-center p-4 rounded-lg bg-muted/50">
+                    <p className="text-muted-foreground">
+                      {submittedCount >= 2
+                        ? 'Waiting for host to start the quiz...'
+                        : 'Waiting for more players...'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </main>
     )
@@ -738,6 +931,18 @@ export function SubmissionView({
                     </Badge>
                   </div>
                 )}
+                {/* Chameleon mode indicator */}
+                {CHAMELEON_MODE && (
+                  <div className="flex items-center justify-between text-sm mt-2">
+                    <span className="text-muted-foreground">Chameleon pick</span>
+                    <Badge
+                      variant={hasChameleonSelected ? 'default' : 'outline'}
+                      className={hasChameleonSelected ? 'bg-purple-600' : ''}
+                    >
+                      🦎 {hasChameleonSelected ? '1/1' : '0/1'}
+                    </Badge>
+                  </div>
+                )}
               </CardHeader>
               <CardContent>
                 {selectedTracks.length === 0 ? (
@@ -748,30 +953,29 @@ export function SubmissionView({
                   <div className="space-y-2 max-h-[500px] overflow-y-auto">
                     {selectedTracks.map((track, index) => {
                       const validation = christmasValidation[track.id]
-                      const isChristmas = validation?.validated
-                        ? validation.isChristmasSong
-                        : track.isLikelyChristmas
+                      const isChristmas = isTrackChristmas(track)
+                      const hasChristmasOverride = christmasOverrides[track.id] !== undefined
+                      const isChameleon = chameleonTrackId === track.id
 
                       return (
                         <div
                           key={track.id}
                           className={`flex items-center gap-2 p-2 rounded-lg ${
-                            validation?.validated && !validation.isChristmasSong
-                              ? 'bg-destructive/10 border border-destructive/30'
-                              : 'bg-muted/50'
+                            isChameleon
+                              ? 'bg-purple-500/10 border border-purple-500/30'
+                              : isChristmas
+                                ? 'bg-green-500/10 border border-green-500/30'
+                                : 'bg-muted/50'
                           }`}
                         >
                           <span className="text-sm text-muted-foreground w-5">{index + 1}.</span>
-                          <div className="relative">
+                          <div className="relative flex-shrink-0">
                             {track.albumArt && (
                               <img
                                 src={track.albumArt}
                                 alt=""
-                                className="w-8 h-8 rounded flex-shrink-0"
+                                className="w-8 h-8 rounded"
                               />
-                            )}
-                            {isChristmas && (
-                              <span className="absolute -top-1 -right-1 text-xs">🎄</span>
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -782,20 +986,54 @@ export function SubmissionView({
                                 <span className="text-xs text-muted-foreground">• {track.releaseYear}</span>
                               )}
                             </div>
-                            {validation?.validated && (
-                              <p className={`text-xs ${validation.isChristmasSong ? 'text-green-600' : 'text-destructive'}`}>
+                            {validation?.validated && !hasChristmasOverride && (
+                              <p className={`text-xs ${validation.isChristmasSong ? 'text-green-600' : 'text-muted-foreground'}`}>
                                 {validation.reason}
                               </p>
                             )}
+                            {hasChristmasOverride && (
+                              <p className="text-xs text-blue-500">
+                                Manually marked as {isChristmas ? 'Christmas' : 'not Christmas'}
+                              </p>
+                            )}
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveTrack(track.id)}
-                            className="text-destructive hover:text-destructive h-7 w-7 p-0"
-                          >
-                            ×
-                          </Button>
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-1">
+                            {/* Christmas toggle */}
+                            <Button
+                              variant={isChristmas ? 'default' : 'ghost'}
+                              size="sm"
+                              onClick={() => toggleChristmas(track)}
+                              className={`h-7 w-7 p-0 ${isChristmas ? 'bg-green-600 hover:bg-green-700' : 'hover:bg-green-500/20'}`}
+                              title={isChristmas ? 'Marked as Christmas song (click to remove)' : 'Mark as Christmas song'}
+                            >
+                              🎄
+                            </Button>
+                            {/* Chameleon toggle */}
+                            {CHAMELEON_MODE && (
+                              <Button
+                                variant={isChameleon ? 'default' : 'ghost'}
+                                size="sm"
+                                onClick={() => toggleChameleon(track.id)}
+                                className={`h-7 w-7 p-0 ${isChameleon ? 'bg-purple-600 hover:bg-purple-700' : 'hover:bg-purple-500/20'}`}
+                                title={isChameleon ? 'This is your chameleon pick' : 'Mark as chameleon pick'}
+                              >
+                                🦎
+                              </Button>
+                            )}
+                            {/* Delete button - more distinct */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveTrack(track.id)}
+                              className="h-7 w-7 p-0 ml-1 text-destructive hover:text-destructive-foreground hover:bg-destructive rounded-full"
+                              title="Remove song"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+                              </svg>
+                            </Button>
+                          </div>
                         </div>
                       )
                     })}
@@ -819,27 +1057,48 @@ export function SubmissionView({
       {/* Fixed Submit Button */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur border-t">
         <div className="max-w-6xl mx-auto space-y-2">
+          {/* AI Summary */}
+          {selectedTracks.length === REQUIRED_SONGS && (
+            <div className="text-center p-3 rounded-lg bg-muted/50 border border-muted">
+              {isLoadingSummary ? (
+                <p className="text-sm text-muted-foreground animate-pulse">✨ AI is reviewing your picks...</p>
+              ) : aiSummary ? (
+                <p className="text-sm italic">&quot;{aiSummary}&quot;</p>
+              ) : null}
+            </div>
+          )}
           {/* Christmas requirement warning */}
           {REQUIRED_CHRISTMAS > 0 && selectedTracks.length === REQUIRED_SONGS && !meetsChristmasRequirement && (
             <p className="text-center text-sm text-amber-500">
               ⚠️ You need at least {REQUIRED_CHRISTMAS} Christmas songs (currently {christmasSongCount})
             </p>
           )}
+          {/* Chameleon requirement warning */}
+          {CHAMELEON_MODE && selectedTracks.length === REQUIRED_SONGS && !hasChameleonSelected && (
+            <p className="text-center text-sm text-purple-500">
+              🦎 Mark one song as your chameleon pick (a song disguised as someone else&apos;s taste)
+            </p>
+          )}
           <Button
             onClick={handleSubmit}
-            disabled={selectedTracks.length !== REQUIRED_SONGS || isSubmitting || isValidating}
+            disabled={
+              selectedTracks.length !== REQUIRED_SONGS ||
+              isSubmitting ||
+              (CHAMELEON_MODE && !hasChameleonSelected) ||
+              (REQUIRED_CHRISTMAS > 0 && !meetsChristmasRequirement)
+            }
             className="w-full h-14 text-lg"
             size="lg"
           >
-            {isValidating
-              ? '🎄 Checking songs with AI...'
-              : isSubmitting
+            {isSubmitting
               ? 'Submitting...'
-              : selectedTracks.length === REQUIRED_SONGS
-              ? REQUIRED_CHRISTMAS > 0
-                ? `Submit Songs (AI will verify ${REQUIRED_CHRISTMAS} are festive)`
-                : 'Submit Songs'
-              : `Select ${REQUIRED_SONGS - selectedTracks.length} more songs`}
+              : selectedTracks.length !== REQUIRED_SONGS
+              ? `Select ${REQUIRED_SONGS - selectedTracks.length} more songs`
+              : REQUIRED_CHRISTMAS > 0 && !meetsChristmasRequirement
+              ? `Need ${REQUIRED_CHRISTMAS - christmasSongCount} more 🎄 Christmas songs`
+              : CHAMELEON_MODE && !hasChameleonSelected
+              ? 'Mark a 🦎 chameleon pick to submit'
+              : 'Submit Songs'}
           </Button>
         </div>
       </div>

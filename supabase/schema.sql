@@ -56,6 +56,8 @@ create table if not exists public.submissions (
   valence real,
   danceability real,
   energy real,
+  -- Chameleon mode: song disguised as someone else's taste
+  is_chameleon boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 

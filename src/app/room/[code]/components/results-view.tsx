@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -9,7 +9,12 @@ import { useRouter } from 'next/navigation'
 import { ResultsReveal } from './results-reveal'
 import { SongLibrary } from './song-library'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
+import { calculateAwards } from './award-reveal'
 import type { Room, Participant, Submission } from '@/types/database'
+
+// Chameleon scoring constants (must match results-reveal.tsx)
+const CHAMELEON_BONUS_PER_WRONG_GUESS = 75
+const CHAMELEON_PENALTY_PER_CORRECT_GUESS = 50
 
 interface SubmissionWithParticipant extends Submission {
   participant: Participant
@@ -251,6 +256,52 @@ export function ResultsView({
     router.push('/lobby')
   }
 
+  // Calculate final scores including chameleon points and awards
+  const calculatedScores = useMemo(() => {
+    const allRounds = [...part1Rounds, ...part2Rounds]
+    const scores: Record<string, number> = {}
+    participants.forEach(p => { scores[p.id] = 0 })
+
+    // Add round scores (100 points per correct guess)
+    allRounds.forEach(round => {
+      round.correctVoters.forEach(voter => {
+        scores[voter.id] = (scores[voter.id] || 0) + 100
+      })
+
+      // Add chameleon scoring
+      if (round.submission.is_chameleon) {
+        const ownerId = round.correctParticipant.id
+        const correctGuesses = round.correctVoters.length
+        const potentialVoters = participants.length - 1
+        const wrongGuesses = potentialVoters - correctGuesses
+
+        const bonus = wrongGuesses * CHAMELEON_BONUS_PER_WRONG_GUESS
+        const penalty = correctGuesses * CHAMELEON_PENALTY_PER_CORRECT_GUESS
+        scores[ownerId] = (scores[ownerId] || 0) + bonus - penalty
+      }
+    })
+
+    // Add trivia scores
+    Object.entries(triviaScores).forEach(([id, score]) => {
+      scores[id] = (scores[id] || 0) + score
+    })
+
+    // Add award points
+    const awards = calculateAwards(participants, allRounds, triviaScores)
+    awards.forEach(award => {
+      scores[award.recipient.id] = (scores[award.recipient.id] || 0) + award.points
+    })
+
+    return scores
+  }, [participants, part1Rounds, part2Rounds, triviaScores])
+
+  // Sort participants by calculated score
+  const sortedParticipants = useMemo(() => {
+    return [...participants].sort(
+      (a, b) => (calculatedScores[b.id] || 0) - (calculatedScores[a.id] || 0)
+    )
+  }, [participants, calculatedScores])
+
   const getRankEmoji = (index: number) => {
     switch (index) {
       case 0: return '🥇'
@@ -341,7 +392,7 @@ export function ResultsView({
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {finalScores.map((participant, index) => (
+                  {sortedParticipants.map((participant, index) => (
                     <div
                       key={participant.id}
                       className={`flex items-center gap-4 p-3 rounded-lg border ${getRankStyle(index)} ${
@@ -366,7 +417,7 @@ export function ResultsView({
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-bold text-secondary">{participant.score}</p>
+                        <p className="text-xl font-bold text-secondary">{calculatedScores[participant.id] || 0}</p>
                       </div>
                     </div>
                   ))}
@@ -454,7 +505,7 @@ export function ResultsView({
                       <tr className="border-b border-border">
                         <th className="text-left py-2 px-3 font-medium text-muted-foreground">Song</th>
                         <th className="text-left py-2 px-3 font-medium text-muted-foreground">Answer</th>
-                        {finalScores.map(p => (
+                        {sortedParticipants.map(p => (
                           <th key={p.id} className="text-center py-2 px-2 font-medium text-muted-foreground">
                             <div className="flex flex-col items-center gap-1">
                               <Avatar className="h-6 w-6">
@@ -496,7 +547,7 @@ export function ResultsView({
                               {result.correctParticipant.display_name}
                             </span>
                           </td>
-                          {finalScores.map(p => {
+                          {sortedParticipants.map(p => {
                             const guess = result.allGuesses.get(p.id)
                             const guessedName = guess?.guessedParticipant?.display_name
                             return (

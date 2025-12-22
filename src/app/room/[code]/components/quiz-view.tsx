@@ -221,6 +221,32 @@ export function QuizView({
     }
   }, [currentRoundIndex, hasVoted, isLoading, rounds.length, settings.guessTimerSeconds])
 
+  // Auto-skip vote for chameleon song owner
+  useEffect(() => {
+    if (!rounds[currentRoundIndex]) return
+    const currentRound = rounds[currentRoundIndex]
+
+    // Check if this is the player's own chameleon song
+    const isOwnChameleon = settings.chameleonMode &&
+      currentRound.submission.is_chameleon &&
+      currentRound.submission.participant_id === currentParticipant.id
+
+    if (isOwnChameleon && !hasVoted) {
+      // Auto-mark as voted (no guess needed - they can't vote on their own song)
+      setHasVoted(true)
+      setWaitingForOthers(true)
+
+      // Record a "chameleon skip" vote in the database
+      supabase.from('votes').insert({
+        round_id: currentRound.round.id,
+        voter_id: currentParticipant.id,
+        guessed_participant_id: null, // No guess - this is their chameleon song
+        is_correct: null, // Not applicable
+        points_awarded: 0,
+      })
+    }
+  }, [currentRoundIndex, rounds, settings.chameleonMode, currentParticipant.id, hasVoted, supabase])
+
   // Handle time expiry - auto-skip vote
   useEffect(() => {
     if (timeRemaining === 0 && !hasVoted && rounds[currentRoundIndex]) {
@@ -397,6 +423,11 @@ export function QuizView({
   const currentRound = rounds[currentRoundIndex]
   const progress = ((currentRoundIndex + 1) / rounds.length) * 100
 
+  // Check if this is the current player's chameleon song
+  const isOwnChameleonSong = settings.chameleonMode &&
+    currentRound.submission.is_chameleon &&
+    currentRound.submission.participant_id === currentParticipant.id
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4">
       <div className="w-full max-w-lg space-y-6">
@@ -450,62 +481,104 @@ export function QuizView({
         {/* Voting */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-center">Who picked this song?</CardTitle>
-            {/* Timer display */}
-            {timeRemaining !== null && !hasVoted && (
-              <div className="flex justify-center mt-2">
-                <Badge
-                  variant={timeRemaining <= 5 ? "destructive" : "secondary"}
-                  className={`text-lg px-4 py-1 ${timeRemaining <= 5 ? 'animate-pulse' : ''}`}
-                >
-                  {timeRemaining}s
-                </Badge>
-              </div>
-            )}
-            {timeRemaining === 0 && hasVoted && !selectedParticipant && (
-              <p className="text-center text-destructive text-sm mt-2">
-                Time&apos;s up! No guess made.
-              </p>
+            {isOwnChameleonSong ? (
+              <>
+                <div className="flex justify-center mb-2">
+                  <Badge variant="secondary" className="text-lg px-4 py-1 bg-gradient-to-r from-green-500/20 to-yellow-500/20">
+                    🦎 Your Chameleon Song
+                  </Badge>
+                </div>
+                <CardTitle className="text-center text-muted-foreground">
+                  Wait for others to guess...
+                </CardTitle>
+              </>
+            ) : (
+              <>
+                <CardTitle className="text-center">Who picked this song?</CardTitle>
+                {/* Timer display */}
+                {timeRemaining !== null && !hasVoted && (
+                  <div className="flex justify-center mt-2">
+                    <Badge
+                      variant={timeRemaining <= 5 ? "destructive" : "secondary"}
+                      className={`text-lg px-4 py-1 ${timeRemaining <= 5 ? 'animate-pulse' : ''}`}
+                    >
+                      {timeRemaining}s
+                    </Badge>
+                  </div>
+                )}
+                {timeRemaining === 0 && hasVoted && !selectedParticipant && (
+                  <p className="text-center text-destructive text-sm mt-2">
+                    Time&apos;s up! No guess made.
+                  </p>
+                )}
+              </>
             )}
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {submittedParticipants.map((participant) => (
-                <Button
-                  key={participant.id}
-                  onClick={() => handleVote(participant.id)}
-                  disabled={hasVoted}
-                  variant={selectedParticipant === participant.id ? 'default' : 'outline'}
-                  className="h-auto py-3 flex flex-col items-center gap-2"
-                >
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={participant.avatar_url || undefined} />
-                    <AvatarFallback>{participant.display_name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm">{participant.display_name}</span>
-                </Button>
-              ))}
-            </div>
+            {isOwnChameleonSong ? (
+              <div className="text-center space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  You can&apos;t vote on your own chameleon song.
+                </p>
+                <p className="text-sm">
+                  If others guess wrong, you&apos;ll earn bonus points!
+                </p>
+                {isHost && (
+                  <Button
+                    onClick={handleNextRound}
+                    className="w-full mt-4"
+                  >
+                    {currentRoundIndex < rounds.length - 1
+                      ? 'Next Song →'
+                      : roundType === 'round1'
+                        ? settings.triviaEnabled
+                          ? 'Continue to Trivia →'
+                          : 'Continue to Part 2 →'
+                        : 'See Results →'}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {submittedParticipants.map((participant) => (
+                    <Button
+                      key={participant.id}
+                      onClick={() => handleVote(participant.id)}
+                      disabled={hasVoted}
+                      variant={selectedParticipant === participant.id ? 'default' : 'outline'}
+                      className="h-auto py-3 flex flex-col items-center gap-2"
+                    >
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={participant.avatar_url || undefined} />
+                        <AvatarFallback>{participant.display_name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{participant.display_name}</span>
+                    </Button>
+                  ))}
+                </div>
 
-            {waitingForOthers && !isHost && (
-              <p className="text-center text-muted-foreground mt-4">
-                Waiting for host to continue...
-              </p>
-            )}
+                {waitingForOthers && !isHost && (
+                  <p className="text-center text-muted-foreground mt-4">
+                    Waiting for host to continue...
+                  </p>
+                )}
 
-            {hasVoted && isHost && (
-              <Button
-                onClick={handleNextRound}
-                className="w-full mt-4"
-              >
-                {currentRoundIndex < rounds.length - 1
-                  ? 'Next Song →'
-                  : roundType === 'round1'
-                    ? settings.triviaEnabled
-                      ? 'Continue to Trivia →'
-                      : 'Continue to Part 2 →'
-                    : 'See Results →'}
-              </Button>
+                {hasVoted && isHost && (
+                  <Button
+                    onClick={handleNextRound}
+                    className="w-full mt-4"
+                  >
+                    {currentRoundIndex < rounds.length - 1
+                      ? 'Next Song →'
+                      : roundType === 'round1'
+                        ? settings.triviaEnabled
+                          ? 'Continue to Trivia →'
+                          : 'Continue to Part 2 →'
+                        : 'See Results →'}
+                  </Button>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

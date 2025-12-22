@@ -1,8 +1,8 @@
 export type RoomStatus = 'LOBBY' | 'SUBMITTING' | 'PLAYING_ROUND_1' | 'TRIVIA' | 'PLAYING_ROUND_2' | 'RESULTS'
 
 export interface GameSettings {
-  songsRequired: 5 | 10 | 15
-  christmasSongsRequired: number // 0 = no requirement, or 1-15
+  songsRequired: number // 1-20
+  christmasSongsRequired: number // 0 = no requirement, up to songsRequired
   chameleonMode: boolean
   guessTimerSeconds: number | null // null = unlimited, 15, or 30
   previewLengthSeconds: 15 | 30
@@ -15,7 +15,7 @@ export interface GameSettings {
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   songsRequired: 10,
-  christmasSongsRequired: 3,
+  christmasSongsRequired: 0,
   chameleonMode: false,
   guessTimerSeconds: null,
   previewLengthSeconds: 30,
@@ -67,6 +67,8 @@ export interface Submission {
   release_year: number | null
   duration_ms: number | null
   popularity: number | null
+  // Chameleon mode - this song is disguised as someone else's taste
+  is_chameleon: boolean
 }
 
 export interface QuizRound {
@@ -120,6 +122,8 @@ export interface Track {
   // Computed/heuristic fields
   isLikelyChristmas: boolean // Based on keywords
   christmasKeywordMatches: string[] // Which keywords matched
+  // Chameleon mode
+  isChameleon?: boolean // Marked as the chameleon pick
 }
 
 // Trivia question types
