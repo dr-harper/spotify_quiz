@@ -17,7 +17,12 @@ export default function Home() {
   const [showGuestForm, setShowGuestForm] = useState(false)
   const router = useRouter()
   const supabase = createClient()
-  const { isPlaying, stop, play } = useBackgroundMusic()
+  const { isPlaying, stop, play, setTrack } = useBackgroundMusic()
+
+  // Ensure home track plays on this page
+  useEffect(() => {
+    setTrack('home')
+  }, [setTrack])
 
   useEffect(() => {
     // Check if user is already logged in

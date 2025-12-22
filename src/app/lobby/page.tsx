@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
+import { useBackgroundMusic } from '@/components/background-music'
 import { createClient } from '@/lib/supabase/client'
 import { generateRoomCode } from '@/lib/utils'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
@@ -29,6 +30,12 @@ export default function LobbyPage() {
   const [roomHistory, setRoomHistory] = useState<RoomHistory[]>([])
   const router = useRouter()
   const supabase = createClient()
+  const { setTrack } = useBackgroundMusic()
+
+  // Switch to app music when entering the lobby
+  useEffect(() => {
+    setTrack('app')
+  }, [setTrack])
 
   useEffect(() => {
     const getUser = async () => {
