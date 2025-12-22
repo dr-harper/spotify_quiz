@@ -12,8 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Slider } from '@/components/ui/slider'
 import type { GameSettings } from '@/types/database'
-import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 
 interface GameSettingsModalProps {
   open: boolean
@@ -72,24 +72,28 @@ export function GameSettingsModal({
           </div>
 
           {/* Christmas Songs Required */}
-          <div className="space-y-2">
-            <Label>Required Christmas songs</Label>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Required Christmas songs</Label>
+              <span className="text-sm font-medium">
+                {localSettings.christmasSongsRequired === 0
+                  ? 'None'
+                  : localSettings.christmasSongsRequired === localSettings.songsRequired
+                    ? 'All'
+                    : localSettings.christmasSongsRequired}
+              </span>
+            </div>
+            <Slider
+              value={[localSettings.christmasSongsRequired]}
+              onValueChange={([value]) => updateSetting('christmasSongsRequired', value)}
+              max={localSettings.songsRequired}
+              min={0}
+              step={1}
+              className="w-full"
+            />
             <p className="text-xs text-muted-foreground">
               Minimum festive songs (verified by AI)
             </p>
-            <div className="flex gap-2">
-              {[0, Math.ceil(localSettings.songsRequired / 2), localSettings.songsRequired].map(num => (
-                <Button
-                  key={num}
-                  variant={localSettings.christmasSongsRequired === num ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => updateSetting('christmasSongsRequired', num)}
-                  className="flex-1"
-                >
-                  {num === 0 ? 'None' : num === localSettings.songsRequired ? 'All' : num}
-                </Button>
-              ))}
-            </div>
           </div>
 
           {/* Chameleon Mode */}

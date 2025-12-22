@@ -25,8 +25,9 @@ export function LobbyView({
   onStartGame,
   onUpdateSettings,
 }: LobbyViewProps) {
-  const [showSettings, setShowSettings] = useState(false)
   const isHost = currentParticipant.is_host
+  // Show settings by default for the host
+  const [showSettings, setShowSettings] = useState(isHost)
   // Allow single player for testing (change to >= 2 for production)
   const canStart = participants.length >= 1
 
@@ -154,6 +155,14 @@ export function LobbyView({
               <span className="text-muted-foreground">Preview length</span>
               <span className="font-medium">{settings.previewLengthSeconds}s</span>
             </div>
+            {settings.triviaEnabled && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Trivia round</span>
+                <Badge variant="secondary" className="text-xs bg-purple-500/20 text-purple-500">
+                  {settings.triviaQuestionCount} questions
+                </Badge>
+              </div>
+            )}
           </CardContent>
         </Card>
 
