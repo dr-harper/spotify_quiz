@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
@@ -51,7 +51,7 @@ export function ResultsReveal({
   const [visibleAwards, setVisibleAwards] = useState(0) // Number of awards revealed
   const [isAutoPlaying, setIsAutoPlaying] = useState(true)
 
-  const allRounds = [...part1Rounds, ...part2Rounds]
+  const allRounds = useMemo(() => [...part1Rounds, ...part2Rounds], [part1Rounds, part2Rounds])
 
   // Calculate awards once
   useEffect(() => {

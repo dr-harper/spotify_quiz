@@ -284,7 +284,10 @@ export function SubmissionView({
         .from('submissions')
         .insert(submissions)
 
-      if (submissionError) throw submissionError
+      if (submissionError) {
+        console.error('Supabase submission error:', submissionError.message, submissionError.details, submissionError.hint)
+        throw submissionError
+      }
 
       // Mark participant as submitted
       const { error: updateError } = await supabase
@@ -295,8 +298,9 @@ export function SubmissionView({
       if (updateError) throw updateError
 
       setHasSubmitted(true)
-    } catch (error) {
-      console.error('Submission error:', error)
+    } catch (error: unknown) {
+      const err = error as { message?: string; details?: string; hint?: string }
+      console.error('Submission error:', err.message || error, err.details, err.hint)
     } finally {
       setIsSubmitting(false)
     }
