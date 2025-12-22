@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { FestiveBackground } from '@/components/festive-background'
+import { useBackgroundMusic } from '@/components/background-music'
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
@@ -16,6 +17,7 @@ export default function Home() {
   const [showGuestForm, setShowGuestForm] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+  const { isPlaying, stop, play } = useBackgroundMusic()
 
   useEffect(() => {
     // Check if user is already logged in
@@ -204,6 +206,27 @@ export default function Home() {
       <footer className="absolute bottom-4 text-sm text-muted-foreground z-10">
         Made with festive cheer 🎄
       </footer>
+
+      {/* Music Toggle Button */}
+      <button
+        onClick={() => isPlaying ? stop() : play()}
+        className="fixed bottom-4 right-4 z-20 p-3 rounded-full bg-card/80 backdrop-blur-sm border border-border hover:bg-card transition-colors"
+        aria-label={isPlaying ? 'Mute music' : 'Play music'}
+      >
+        {isPlaying ? (
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <line x1="23" y1="9" x2="17" y2="15" />
+            <line x1="17" y1="9" x2="23" y2="15" />
+          </svg>
+        )}
+      </button>
     </main>
   )
 }
