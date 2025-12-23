@@ -93,6 +93,14 @@ export type SubmissionInsert = {
   submission_order: number
 }
 
+export type VoteInsert = {
+  round_id: string
+  voter_id: string
+  guessed_participant_id: string
+  is_correct: boolean
+  points_awarded: number
+}
+
 export interface QuizRound {
   id: string
   room_id: string

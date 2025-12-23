@@ -11,7 +11,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import type { SubmissionInsert } from '@/types/database'
+import type { SubmissionInsert, VoteInsert } from '@/types/database'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -24,14 +24,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const TEST_ROOM_CODE = 'TEST01'
-
-type VoteInsert = {
-  round_id: string
-  voter_id: string
-  guessed_participant_id: string
-  is_correct: boolean
-  points_awarded: number
-}
 
 const TEST_PLAYERS = [
   { name: 'Alice', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alice' },

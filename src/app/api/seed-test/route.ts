@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import type { SubmissionInsert } from '@/types/database'
+import type { SubmissionInsert, VoteInsert } from '@/types/database'
 
 const TEST_ROOM_CODE = 'TEST01'
 
@@ -157,13 +157,7 @@ export async function POST() {
     if (roundsError) throw roundsError
 
     // Create votes with realistic distribution
-    const votes: {
-      round_id: string
-      voter_id: string
-      guessed_participant_id: string
-      is_correct: boolean
-      points_awarded: number
-    }[] = []
+    const votes: VoteInsert[] = []
     const scores: { [id: string]: number } = {}
     allParticipants.forEach(p => { scores[p.id] = 0 })
 
