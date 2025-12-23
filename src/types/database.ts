@@ -3,6 +3,7 @@ export type RoomStatus = 'LOBBY' | 'SUBMITTING' | 'PLAYING_ROUND_1' | 'TRIVIA' |
 export interface GameSettings {
   songsRequired: number // 1-20
   christmasSongsRequired: number // 0 = no requirement, up to songsRequired
+  recentSongsRequired: number // 0 = no requirement, songs from current/last year
   chameleonMode: boolean
   guessTimerSeconds: number | null // null = unlimited, 15, or 30
   previewLengthSeconds: 15 | 30
@@ -16,6 +17,7 @@ export interface GameSettings {
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   songsRequired: 10,
   christmasSongsRequired: 0,
+  recentSongsRequired: 0,
   chameleonMode: false,
   guessTimerSeconds: null,
   previewLengthSeconds: 30,

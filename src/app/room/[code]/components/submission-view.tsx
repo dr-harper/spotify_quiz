@@ -39,7 +39,10 @@ export function SubmissionView({
   const settings = room.settings || DEFAULT_GAME_SETTINGS
   const REQUIRED_SONGS = settings.songsRequired
   const REQUIRED_CHRISTMAS = settings.christmasSongsRequired || 0
+  const REQUIRED_RECENT = settings.recentSongsRequired || 0
+  const CURRENT_YEAR = new Date().getFullYear()
   const CHAMELEON_MODE = settings.chameleonMode || false
+  const ALLOW_DUPLICATES = settings.allowDuplicateSongs || false
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Track[]>([])
   const [selectedTracks, setSelectedTracks] = useState<Track[]>([])
@@ -55,6 +58,7 @@ export function SubmissionView({
   const [christmasOverrides, setChristmasOverrides] = useState<Record<string, boolean>>({})
   const [aiSummary, setAiSummary] = useState<string | null>(null)
   const [isLoadingSummary, setIsLoadingSummary] = useState(false)
+  const [takenTrackIds, setTakenTrackIds] = useState<Set<string>>(new Set())
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = createClient()
@@ -145,6 +149,33 @@ export function SubmissionView({
     fetchSubmissions()
   }, [currentParticipant.has_submitted, currentParticipant.id, supabase])
 
+  // Fetch other players' submissions to prevent duplicates (when not allowed)
+  useEffect(() => {
+    if (ALLOW_DUPLICATES) return
+    if (currentParticipant.has_submitted) return
+
+    const fetchTakenTracks = async () => {
+      // Get all other participants in this room
+      const otherParticipantIds = participants
+        .filter(p => p.id !== currentParticipant.id)
+        .map(p => p.id)
+
+      if (otherParticipantIds.length === 0) return
+
+      const { data } = await supabase
+        .from('submissions')
+        .select('track_id')
+        .in('participant_id', otherParticipantIds)
+
+      if (data && data.length > 0) {
+        const trackIds = new Set(data.map(sub => sub.track_id))
+        setTakenTrackIds(trackIds)
+      }
+    }
+
+    fetchTakenTracks()
+  }, [ALLOW_DUPLICATES, currentParticipant.has_submitted, currentParticipant.id, participants, supabase])
+
   // Check if a track is marked as Christmas (respects user overrides)
   const isTrackChristmas = (track: Track): boolean => {
     // User override takes priority
@@ -162,6 +193,16 @@ export function SubmissionView({
   const christmasSongCount = selectedTracks.filter(isTrackChristmas).length
 
   const meetsChristmasRequirement = christmasSongCount >= REQUIRED_CHRISTMAS
+
+  // Check if a track is from the current year
+  const isTrackRecent = (track: Track): boolean => {
+    return track.releaseYear === CURRENT_YEAR
+  }
+
+  // Count recent songs (from current year)
+  const recentSongCount = selectedTracks.filter(isTrackRecent).length
+
+  const meetsRecentRequirement = recentSongCount >= REQUIRED_RECENT
 
   const togglePlay = (track: Track) => {
     if (!track.previewUrl) return
@@ -216,9 +257,11 @@ export function SubmissionView({
       const response = await fetch(`/api/spotify/search?q=${encodeURIComponent(query)}`)
       const data = await response.json()
       if (data.tracks) {
-        // Filter out already selected tracks
+        // Filter out already selected tracks and taken tracks (if duplicates not allowed)
         const filtered = data.tracks.filter(
-          (track: Track) => !selectedTracks.some(s => s.id === track.id)
+          (track: Track) =>
+            !selectedTracks.some(s => s.id === track.id) &&
+            (ALLOW_DUPLICATES || !takenTrackIds.has(track.id))
         )
         setSearchResults(filtered)
       }
@@ -227,7 +270,7 @@ export function SubmissionView({
     } finally {
       setIsSearching(false)
     }
-  }, [selectedTracks])
+  }, [selectedTracks, ALLOW_DUPLICATES, takenTrackIds])
 
   // Debounced search - triggers automatically as user types
   useEffect(() => {
@@ -264,6 +307,8 @@ export function SubmissionView({
 
   const handleSelectTrack = (track: Track) => {
     if (selectedTracks.length >= REQUIRED_SONGS) return
+    // Prevent adding the same song twice (race condition protection)
+    if (selectedTracks.some(t => t.id === track.id)) return
     setSelectedTracks([...selectedTracks, track])
     setSearchResults(searchResults.filter(t => t.id !== track.id))
   }
@@ -402,6 +447,12 @@ export function SubmissionView({
     // Validate Christmas songs requirement
     if (REQUIRED_CHRISTMAS > 0 && !meetsChristmasRequirement) {
       setValidationError(`You need at least ${REQUIRED_CHRISTMAS} Christmas songs (currently ${christmasSongCount}). Use the 🎄 button to mark songs as festive.`)
+      return
+    }
+
+    // Validate recent songs requirement
+    if (REQUIRED_RECENT > 0 && !meetsRecentRequirement) {
+      setValidationError(`You need at least ${REQUIRED_RECENT} song${REQUIRED_RECENT > 1 ? 's' : ''} from ${CURRENT_YEAR} (currently ${recentSongCount}).`)
       return
     }
 
@@ -931,6 +982,18 @@ export function SubmissionView({
                     </Badge>
                   </div>
                 )}
+                {/* Recent songs requirement indicator */}
+                {REQUIRED_RECENT > 0 && (
+                  <div className="flex items-center justify-between text-sm mt-2">
+                    <span className="text-muted-foreground">Songs from {CURRENT_YEAR}</span>
+                    <Badge
+                      variant={meetsRecentRequirement ? 'default' : 'destructive'}
+                      className={meetsRecentRequirement ? 'bg-blue-600' : ''}
+                    >
+                      📅 {recentSongCount}/{REQUIRED_RECENT}
+                    </Badge>
+                  </div>
+                )}
                 {/* Chameleon mode indicator */}
                 {CHAMELEON_MODE && (
                   <div className="flex items-center justify-between text-sm mt-2">
@@ -983,7 +1046,9 @@ export function SubmissionView({
                             <div className="flex items-center gap-1">
                               <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
                               {track.releaseYear && (
-                                <span className="text-xs text-muted-foreground">• {track.releaseYear}</span>
+                                <span className={`text-xs ${isTrackRecent(track) ? 'text-blue-500 font-medium' : 'text-muted-foreground'}`}>
+                                  • {track.releaseYear} {isTrackRecent(track) && REQUIRED_RECENT > 0 && '📅'}
+                                </span>
                               )}
                             </div>
                             {validation?.validated && !hasChristmasOverride && (
@@ -1073,6 +1138,12 @@ export function SubmissionView({
               ⚠️ You need at least {REQUIRED_CHRISTMAS} Christmas songs (currently {christmasSongCount})
             </p>
           )}
+          {/* Recent songs requirement warning */}
+          {REQUIRED_RECENT > 0 && selectedTracks.length === REQUIRED_SONGS && !meetsRecentRequirement && (
+            <p className="text-center text-sm text-blue-500">
+              📅 You need at least {REQUIRED_RECENT} song{REQUIRED_RECENT > 1 ? 's' : ''} from {CURRENT_YEAR} (currently {recentSongCount})
+            </p>
+          )}
           {/* Chameleon requirement warning */}
           {CHAMELEON_MODE && selectedTracks.length === REQUIRED_SONGS && !hasChameleonSelected && (
             <p className="text-center text-sm text-purple-500">
@@ -1085,7 +1156,8 @@ export function SubmissionView({
               selectedTracks.length !== REQUIRED_SONGS ||
               isSubmitting ||
               (CHAMELEON_MODE && !hasChameleonSelected) ||
-              (REQUIRED_CHRISTMAS > 0 && !meetsChristmasRequirement)
+              (REQUIRED_CHRISTMAS > 0 && !meetsChristmasRequirement) ||
+              (REQUIRED_RECENT > 0 && !meetsRecentRequirement)
             }
             className="w-full h-14 text-lg"
             size="lg"
@@ -1096,6 +1168,8 @@ export function SubmissionView({
               ? `Select ${REQUIRED_SONGS - selectedTracks.length} more songs`
               : REQUIRED_CHRISTMAS > 0 && !meetsChristmasRequirement
               ? `Need ${REQUIRED_CHRISTMAS - christmasSongCount} more 🎄 Christmas songs`
+              : REQUIRED_RECENT > 0 && !meetsRecentRequirement
+              ? `Need ${REQUIRED_RECENT - recentSongCount} more 📅 ${CURRENT_YEAR} songs`
               : CHAMELEON_MODE && !hasChameleonSelected
               ? 'Mark a 🦎 chameleon pick to submit'
               : 'Submit Songs'}

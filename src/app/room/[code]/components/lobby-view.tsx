@@ -271,6 +271,28 @@ Join: ${url}`
                   />
                 </div>
 
+                {/* Recent Songs Required */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Songs from this year</Label>
+                    <span className="text-sm font-medium">
+                      {settings.recentSongsRequired === 0
+                        ? 'None'
+                        : settings.recentSongsRequired === settings.songsRequired
+                          ? 'All'
+                          : settings.recentSongsRequired}
+                    </span>
+                  </div>
+                  <Slider
+                    value={[settings.recentSongsRequired || 0]}
+                    onValueChange={([value]) => updateSetting('recentSongsRequired', value)}
+                    max={settings.songsRequired}
+                    min={0}
+                    step={1}
+                    className="w-full"
+                  />
+                </div>
+
                 {/* Preview Length */}
                 <div className="space-y-2">
                   <Label className="text-sm">Preview length</Label>
