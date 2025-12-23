@@ -60,9 +60,25 @@ export function SubmissionView({
   const [moodTag, setMoodTag] = useState<string | null>(null)
   const [isLoadingSummary, setIsLoadingSummary] = useState(false)
   const [takenTrackIds, setTakenTrackIds] = useState<Set<string>>(new Set())
+  const [copied, setCopied] = useState(false)
+  const [showPlayers, setShowPlayers] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = createClient()
+
+  const displayName = room.name?.trim() || room.room_code
+
+  const copyRoomLink = () => {
+    const url = `${window.location.origin}/room/${room.room_code}`
+    const inviteText = `🎵 ${displayName}
+
+Pick your favourite songs, we'll shuffle them into a playlist, then guess who chose what!
+
+Join: ${url}`
+    navigator.clipboard.writeText(inviteText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   // localStorage key for draft persistence
   const DRAFT_KEY = `festive-frequencies-draft-${room.id}`
@@ -605,6 +621,23 @@ export function SubmissionView({
             />
           </div>
 
+          {/* Room Info Header */}
+          <div className="my-4 max-w-md mx-auto lg:max-w-none">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-card/80 border border-border/50">
+              <div>
+                <h1 className="text-lg font-bold">{displayName}</h1>
+                <p className="text-xs text-muted-foreground font-mono">Code: {room.room_code}</p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={copyRoomLink}
+              >
+                {copied ? '✓ Copied!' : '📋 Invite'}
+              </Button>
+            </div>
+          </div>
+
           <div className="text-center space-y-1 my-6">
             <div className="text-4xl mb-2">🎄</div>
             <h1 className="text-2xl font-bold text-foreground">Songs Submitted!</h1>
@@ -842,6 +875,63 @@ export function SubmissionView({
           canNavigate={isHost}
           onNavigate={(stage) => stage === 'lobby' && onNavigateToLobby()}
         />
+      </div>
+
+      {/* Room Info Header */}
+      <div className="max-w-6xl mx-auto w-full mt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-card/80 border border-border/50">
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-lg font-bold">{displayName}</h1>
+              <p className="text-xs text-muted-foreground font-mono">Code: {room.room_code}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPlayers(!showPlayers)}
+              className="gap-1"
+            >
+              <span>👥</span>
+              <span>{participants.length}</span>
+              <span className="text-xs">({participants.filter(p => p.has_submitted).length} ready)</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={copyRoomLink}
+            >
+              {copied ? '✓ Copied!' : '📋 Invite'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Collapsible Player List */}
+        {showPlayers && (
+          <div className="mt-2 p-3 rounded-lg bg-card/60 border border-border/30">
+            <div className="flex flex-wrap gap-2">
+              {participants.map((p) => (
+                <div
+                  key={p.id}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
+                    p.has_submitted ? 'bg-green-500/20 text-green-400' : 'bg-muted/50'
+                  }`}
+                >
+                  <Avatar className="h-5 w-5">
+                    <AvatarImage src={p.avatar_url || undefined} />
+                    <AvatarFallback className="text-[10px]">
+                      {p.display_name.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span>{p.display_name}</span>
+                  {p.is_host && <span className="text-xs">👑</span>}
+                  {p.has_submitted && <span className="text-xs">✓</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Progress Header */}
