@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const { data: submissions } = await supabase
       .from('submissions')
-      .select('track_id, track_name, artist_name')
+      .select('track_id, track_name, artist_name, participant_id')
       .in('participant_id', participantIds)
 
     if (!submissions || submissions.length === 0) {
@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Use Gemini AI to order songs for optimal energy progression
+    // Also ensures player variety (no consecutive songs from same person)
     const orderedSubmissions = await orderSongsWithGemini(submissions)
 
     // Create playlist
