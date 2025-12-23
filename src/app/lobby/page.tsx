@@ -58,6 +58,7 @@ export default function LobbyPage() {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
+        console.log('Current user ID:', user.id, 'Provider:', user.app_metadata?.provider || 'unknown')
         setUser(user)
         // Extract Spotify metadata
         const meta = user.user_metadata
@@ -67,13 +68,23 @@ export default function LobbyPage() {
         })
 
         // Fetch room history
-        const { data: participations } = await supabase
+        const { data: participations, error: participationsError } = await supabase
           .from('participants')
           .select('is_host, rooms(*)')
           .eq('user_id', user.id)
           .limit(10)
 
+        if (participationsError) {
+          console.error('Error fetching room history:', participationsError)
+        }
+
         if (participations) {
+          console.log('Found participations for user:', user.id, 'Count:', participations.length)
+          console.log('Participations:', participations.map(p => ({
+            isHost: p.is_host,
+            roomCode: (p.rooms as unknown as Room)?.room_code,
+            roomStatus: (p.rooms as unknown as Room)?.status
+          })))
           const roomsWithParticipants = participations.filter(p => p.rooms)
           const roomIds = roomsWithParticipants.map(p => (p.rooms as unknown as Room).id)
 

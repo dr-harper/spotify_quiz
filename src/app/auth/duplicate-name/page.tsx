@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { FestiveBackground } from '@/components/festive-background'
 import { createClient } from '@/lib/supabase/client'
 
-export default function DuplicateNamePage() {
+function DuplicateNameContent() {
   const [isReclaiming, setIsReclaiming] = useState(false)
   const [isCreatingNew, setIsCreatingNew] = useState(false)
   const [newName, setNewName] = useState('')
@@ -104,75 +104,93 @@ export default function DuplicateNamePage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4">
-      <FestiveBackground />
+    <Card className="w-full max-w-md border-2 border-amber-500/30 shadow-xl relative z-10 bg-card/95 backdrop-blur-sm">
+      <CardHeader className="text-center">
+        <div className="text-4xl mb-2">⚠️</div>
+        <CardTitle className="text-xl">Name Already Taken</CardTitle>
+        <CardDescription>
+          Someone named <strong>&quot;{existingName}&quot;</strong> is already in this room.
+          Is that you?
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!showNameInput ? (
+          <>
+            <Button
+              onClick={handleReclaim}
+              disabled={isReclaiming}
+              className="w-full h-12"
+            >
+              {isReclaiming ? 'Rejoining...' : `Yes, that's me — rejoin as ${existingName}`}
+            </Button>
 
-      <Card className="w-full max-w-md border-2 border-amber-500/30 shadow-xl relative z-10 bg-card/95 backdrop-blur-sm">
-        <CardHeader className="text-center">
-          <div className="text-4xl mb-2">⚠️</div>
-          <CardTitle className="text-xl">Name Already Taken</CardTitle>
-          <CardDescription>
-            Someone named <strong>&quot;{existingName}&quot;</strong> is already in this room.
-            Is that you?
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!showNameInput ? (
-            <>
-              <Button
-                onClick={handleReclaim}
-                disabled={isReclaiming}
-                className="w-full h-12"
-              >
-                {isReclaiming ? 'Rejoining...' : `Yes, that's me — rejoin as ${existingName}`}
-              </Button>
-
+            <Button
+              variant="outline"
+              onClick={() => setShowNameInput(true)}
+              className="w-full h-12"
+            >
+              No, I&apos;ll use a different name
+            </Button>
+          </>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Input
+                placeholder="Enter a different name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="h-12 text-center"
+                maxLength={20}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={() => setShowNameInput(true)}
-                className="w-full h-12"
+                onClick={() => setShowNameInput(false)}
+                className="flex-1 h-12"
+                disabled={isCreatingNew}
               >
-                No, I&apos;ll use a different name
+                Back
               </Button>
-            </>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Input
-                  placeholder="Enter a different name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="h-12 text-center"
-                  maxLength={20}
-                  autoFocus
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowNameInput(false)}
-                  className="flex-1 h-12"
-                  disabled={isCreatingNew}
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={handleUseDifferentName}
-                  disabled={!newName.trim() || isCreatingNew}
-                  className="flex-1 h-12"
-                >
-                  {isCreatingNew ? 'Joining...' : 'Join'}
-                </Button>
-              </div>
-            </>
-          )}
+              <Button
+                onClick={handleUseDifferentName}
+                disabled={!newName.trim() || isCreatingNew}
+                className="flex-1 h-12"
+              >
+                {isCreatingNew ? 'Joining...' : 'Join'}
+              </Button>
+            </div>
+          </>
+        )}
 
-          <p className="text-xs text-center text-muted-foreground mt-4">
-            Guest sessions can expire if you close your browser or clear cookies.
-            For a persistent account, use Spotify login.
-          </p>
-        </CardContent>
-      </Card>
+        <p className="text-xs text-center text-muted-foreground mt-4">
+          Guest sessions can expire if you close your browser or clear cookies.
+          For a persistent account, use Spotify login.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function LoadingCard() {
+  return (
+    <Card className="w-full max-w-md border-2 border-muted/30 shadow-xl relative z-10 bg-card/95 backdrop-blur-sm">
+      <CardHeader className="text-center">
+        <div className="text-4xl mb-2 animate-pulse">⏳</div>
+        <CardTitle className="text-xl">Loading...</CardTitle>
+      </CardHeader>
+    </Card>
+  )
+}
+
+export default function DuplicateNamePage() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center p-4">
+      <FestiveBackground />
+      <Suspense fallback={<LoadingCard />}>
+        <DuplicateNameContent />
+      </Suspense>
     </main>
   )
 }
