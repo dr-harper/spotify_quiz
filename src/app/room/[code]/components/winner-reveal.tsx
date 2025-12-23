@@ -102,13 +102,18 @@ export function WinnerReveal({ winner, finalScore, onComplete }: WinnerRevealPro
 
 // Simple CSS-based confetti effect
 function ConfettiEffect() {
+  const seededRandom = (seed: number) => {
+    const x = Math.sin(seed * 9973) * 10000
+    return x - Math.floor(x)
+  }
+
   const confettiPieces = Array.from({ length: 50 }, (_, i) => ({
     id: i,
-    left: `${Math.random() * 100}%`,
-    delay: `${Math.random() * 2}s`,
-    duration: `${2 + Math.random() * 2}s`,
+    left: `${seededRandom(i * 11 + 3) * 100}%`,
+    delay: `${seededRandom(i * 13 + 5) * 2}s`,
+    duration: `${2 + seededRandom(i * 17 + 7) * 2}s`,
     colour: ['#ef4444', '#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'][
-      Math.floor(Math.random() * 6)
+      Math.floor(seededRandom(i * 19 + 11) * 6)
     ],
   }))
 

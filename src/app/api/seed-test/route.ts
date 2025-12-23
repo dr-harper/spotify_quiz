@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import type { SubmissionInsert, VoteInsert } from '@/types/database'
 
 const TEST_ROOM_CODE = 'TEST01'
 
@@ -90,7 +91,7 @@ export async function POST() {
 
     // Try to create mock participants with null user_id
     // This requires the migration in supabase/migrations/allow_test_participants.sql
-    const allParticipants: any[] = [realParticipant]
+    const allParticipants: typeof realParticipant[] = [realParticipant]
 
     for (const mockPlayer of MOCK_PLAYERS) {
       const { data: mockP, error: mockError } = await supabase
@@ -116,7 +117,7 @@ export async function POST() {
     const isMultiPlayer = allParticipants.length > 1
 
     // Create submissions (10 songs per participant)
-    const allSubmissions: any[] = []
+    const allSubmissions: SubmissionInsert[] = []
     for (const participant of allParticipants) {
       const shuffledSongs = [...SAMPLE_SONGS].sort(() => Math.random() - 0.5)
       for (let i = 0; i < 10; i++) {
@@ -156,7 +157,7 @@ export async function POST() {
     if (roundsError) throw roundsError
 
     // Create votes with realistic distribution
-    const votes: any[] = []
+    const votes: VoteInsert[] = []
     const scores: { [id: string]: number } = {}
     allParticipants.forEach(p => { scores[p.id] = 0 })
 

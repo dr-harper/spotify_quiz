@@ -11,6 +11,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import type { SubmissionInsert, VoteInsert } from '@/types/database'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -180,7 +181,7 @@ async function seedTestData() {
 
     // Create submissions (10 per participant)
     console.log('Creating submissions...')
-    const allSubmissions: any[] = []
+    const allSubmissions: SubmissionInsert[] = []
 
     for (const participant of participants) {
       const shuffledSongs = [...SAMPLE_SONGS].sort(() => Math.random() - 0.5)
@@ -227,7 +228,7 @@ async function seedTestData() {
 
     // Create votes with realistic distribution
     console.log('Creating votes...')
-    const votes: any[] = []
+    const votes: VoteInsert[] = []
     const scores: { [participantId: string]: number } = {}
 
     participants.forEach(p => { scores[p.id] = 0 })
