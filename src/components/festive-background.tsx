@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useMemo } from 'react'
 
 interface Snowflake {
   id: number
@@ -71,27 +71,9 @@ interface FestiveBackgroundProps {
 }
 
 export function FestiveBackground({ showSnow = true }: FestiveBackgroundProps) {
-  // Generate elements only on client to avoid hydration mismatch
-  const [snowflakes, setSnowflakes] = useState<Snowflake[]>([])
-  const [decorations, setDecorations] = useState<Decoration[]>([])
-  const [stars, setStars] = useState<Star[]>([])
-  const [isMounted, setIsMounted] = useState(false)
-
-  useEffect(() => {
-    setSnowflakes(generateSnowflakes())
-    setDecorations(generateDecorations())
-    setStars(generateStars())
-    setIsMounted(true)
-  }, [])
-
-  // Don't render anything until mounted to avoid hydration issues
-  if (!isMounted) {
-    return (
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-secondary/5" />
-      </div>
-    )
-  }
+  const snowflakes = useMemo(() => generateSnowflakes(), [])
+  const decorations = useMemo(() => generateDecorations(), [])
+  const stars = useMemo(() => generateStars(), [])
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">

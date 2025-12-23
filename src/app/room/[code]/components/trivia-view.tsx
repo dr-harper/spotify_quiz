@@ -104,62 +104,13 @@ export function TriviaView({
   }, [room.id, isHost, settings.triviaQuestionCount, supabase])
 
   useEffect(() => {
-    initTrivia()
+    const timeout = setTimeout(() => {
+      initTrivia()
+    }, 0)
+    return () => clearTimeout(timeout)
   }, [initTrivia])
 
-  // Timer countdown
-  useEffect(() => {
-    if (isLoading || questions.length === 0 || hasAnswered || showResult) {
-      return
-    }
-
-    setTimeRemaining(15)
-
-    timerRef.current = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current)
-          // Time's up - auto submit with no answer
-          handleAnswer(null)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [currentQuestionIndex, isLoading, questions.length, hasAnswered, showResult])
-
-  // Listen for question sync from host
-  useEffect(() => {
-    if (!room.id) return
-
-    const channel = supabase
-      .channel(`trivia-sync:${room.id}`)
-      .on('broadcast', { event: 'next_question' }, ({ payload }) => {
-        if (payload.questionIndex !== undefined) {
-          setCurrentQuestionIndex(payload.questionIndex)
-          setSelectedAnswer(null)
-          setHasAnswered(false)
-          setShowResult(false)
-        }
-      })
-      .on('broadcast', { event: 'show_result' }, () => {
-        setShowResult(true)
-      })
-      .on('broadcast', { event: 'trivia_end' }, () => {
-        onTriviaEnd()
-      })
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [room.id, supabase, onTriviaEnd])
-
-  const handleAnswer = async (answerIndex: number | null) => {
+  const handleAnswer = useCallback(async (answerIndex: number | null) => {
     if (hasAnswered) return
 
     if (timerRef.current) clearInterval(timerRef.current)
@@ -190,7 +141,94 @@ export function TriviaView({
         .update({ score: currentParticipant.score + points })
         .eq('id', currentParticipant.id)
     }
-  }
+
+    // Show result to player
+    setShowResult(true)
+
+    // Broadcast result to other players
+    supabase
+      .channel(`trivia-sync:${room.id}`)
+      .send({
+        type: 'broadcast',
+        event: 'show_result',
+        payload: { questionIndex: currentQuestionIndex },
+      })
+
+    // If last question, end trivia
+    if (currentQuestionIndex === questions.length - 1) {
+      supabase
+        .channel(`trivia-sync:${room.id}`)
+        .send({
+          type: 'broadcast',
+          event: 'trivia_end',
+        })
+      onTriviaEnd()
+    }
+  }, [
+    currentParticipant.id,
+    currentParticipant.score,
+    currentQuestionIndex,
+    hasAnswered,
+    onTriviaEnd,
+    questions,
+    room.id,
+    supabase,
+  ])
+
+  // Timer countdown
+  useEffect(() => {
+    if (isLoading || questions.length === 0 || hasAnswered || showResult) {
+      return
+    }
+
+    const timerStarter = setTimeout(() => {
+      setTimeRemaining(15)
+
+      timerRef.current = setInterval(() => {
+        setTimeRemaining(prev => {
+          if (prev <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current)
+            // Time's up - auto submit with no answer
+            handleAnswer(null)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }, 0)
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+      clearTimeout(timerStarter)
+    }
+  }, [currentQuestionIndex, isLoading, questions.length, hasAnswered, showResult, handleAnswer])
+
+  // Listen for question sync from host
+  useEffect(() => {
+    if (!room.id) return
+
+    const channel = supabase
+      .channel(`trivia-sync:${room.id}`)
+      .on('broadcast', { event: 'next_question' }, ({ payload }) => {
+        if (payload.questionIndex !== undefined) {
+          setCurrentQuestionIndex(payload.questionIndex)
+          setSelectedAnswer(null)
+          setHasAnswered(false)
+          setShowResult(false)
+        }
+      })
+      .on('broadcast', { event: 'show_result' }, () => {
+        setShowResult(true)
+      })
+      .on('broadcast', { event: 'trivia_end' }, () => {
+        onTriviaEnd()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [room.id, supabase, onTriviaEnd])
 
   const handleShowResult = async () => {
     setShowResult(true)

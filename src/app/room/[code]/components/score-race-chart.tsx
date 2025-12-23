@@ -46,18 +46,14 @@ export function ScoreRaceChart({
   onComplete,
 }: ScoreRaceChartProps) {
   const [displayedRounds, setDisplayedRounds] = useState(0)
-  const [animationComplete, setAnimationComplete] = useState(false)
+  const [animationComplete, setAnimationComplete] = useState(scoreData.length === 0)
   const [isPaused, setIsPaused] = useState(false)
 
   const totalRounds = scoreData.length
 
   // Step through rounds slowly
   useEffect(() => {
-    if (totalRounds === 0) {
-      setAnimationComplete(true)
-      return
-    }
-
+    if (totalRounds === 0) return
     if (isPaused || animationComplete) return
 
     // Slower: 1.5 seconds per round

@@ -90,7 +90,7 @@ export async function POST() {
 
     // Try to create mock participants with null user_id
     // This requires the migration in supabase/migrations/allow_test_participants.sql
-    const allParticipants: any[] = [realParticipant]
+    const allParticipants: typeof realParticipant[] = [realParticipant]
 
     for (const mockPlayer of MOCK_PLAYERS) {
       const { data: mockP, error: mockError } = await supabase
@@ -116,7 +116,15 @@ export async function POST() {
     const isMultiPlayer = allParticipants.length > 1
 
     // Create submissions (10 songs per participant)
-    const allSubmissions: any[] = []
+    const allSubmissions: {
+      participant_id: string
+      track_id: string
+      track_name: string
+      artist_name: string
+      album_art_url: string
+      preview_url: string
+      submission_order: number
+    }[] = []
     for (const participant of allParticipants) {
       const shuffledSongs = [...SAMPLE_SONGS].sort(() => Math.random() - 0.5)
       for (let i = 0; i < 10; i++) {
@@ -156,7 +164,13 @@ export async function POST() {
     if (roundsError) throw roundsError
 
     // Create votes with realistic distribution
-    const votes: any[] = []
+    const votes: {
+      round_id: string
+      voter_id: string
+      guessed_participant_id: string
+      is_correct: boolean
+      points_awarded: number
+    }[] = []
     const scores: { [id: string]: number } = {}
     allParticipants.forEach(p => { scores[p.id] = 0 })
 
