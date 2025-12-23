@@ -13,7 +13,9 @@ import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import type { Room } from '@/types/database'
+import type { GameSettings, Room } from '@/types/database'
+import { DEFAULT_GAME_SETTINGS } from '@/types/database'
+import { GameSettingsModal } from '@/app/room/[code]/components/game-settings-modal'
 
 interface RoomHistory {
   room: Room
@@ -45,6 +47,8 @@ export default function LobbyPage() {
   const [isJoining, setIsJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [roomHistory, setRoomHistory] = useState<RoomHistory[]>([])
+  const [settingsDraft, setSettingsDraft] = useState<GameSettings>(DEFAULT_GAME_SETTINGS)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const router = useRouter()
   const supabase = createClient()
   const { setTrack } = useBackgroundMusic()
@@ -119,7 +123,7 @@ export default function LobbyPage() {
     getUser()
   }, [supabase.auth])
 
-  const handleCreateRoom = async () => {
+  const handleCreateRoom = async (settings: GameSettings) => {
     if (!user) return
     setIsCreating(true)
     setError(null)
@@ -136,7 +140,8 @@ export default function LobbyPage() {
           room_code: roomCode,
           host_id: user.id,
           name: normalizedName ? normalizedName : null,
-          status: 'LOBBY',
+          status: 'SUBMITTING',
+          settings,
         })
         .select()
         .single()
@@ -163,6 +168,17 @@ export default function LobbyPage() {
       setError('Failed to create room. Please try again.')
       setIsCreating(false)
     }
+  }
+
+  const openSettingsModal = () => {
+    if (!user) return
+    setSettingsModalOpen(true)
+  }
+
+  const handleSettingsSave = async (settings: GameSettings) => {
+    setSettingsDraft(settings)
+    setSettingsModalOpen(false)
+    await handleCreateRoom(settings)
   }
 
   const handleJoinRoom = async () => {
@@ -265,11 +281,11 @@ export default function LobbyPage() {
                 </p>
               </div>
               <Button
-                onClick={handleCreateRoom}
+                onClick={openSettingsModal}
                 disabled={isCreating}
                 className="w-full h-12 text-lg"
               >
-                {isCreating ? 'Creating...' : 'Create Room'}
+                {isCreating ? 'Creating...' : 'Create & Choose Settings'}
               </Button>
             </CardContent>
           </Card>
@@ -363,6 +379,14 @@ export default function LobbyPage() {
             </CardContent>
           </Card>
         )}
+
+        <GameSettingsModal
+          open={settingsModalOpen}
+          onOpenChange={(open) => setSettingsModalOpen(open)}
+          settings={settingsDraft}
+          onSave={handleSettingsSave}
+          isSaving={isCreating}
+        />
       </div>
     </main>
   )

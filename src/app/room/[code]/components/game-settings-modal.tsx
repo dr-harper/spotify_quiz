@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,6 +20,7 @@ interface GameSettingsModalProps {
   onOpenChange: (open: boolean) => void
   settings: GameSettings
   onSave: (settings: GameSettings) => void
+  isSaving?: boolean
 }
 
 export function GameSettingsModal({
@@ -27,24 +28,36 @@ export function GameSettingsModal({
   onOpenChange,
   settings,
   onSave,
+  isSaving = false,
 }: GameSettingsModalProps) {
   const [localSettings, setLocalSettings] = useState<GameSettings>(settings)
+
+  useEffect(() => {
+    setLocalSettings(settings)
+  }, [settings])
 
   const handleSave = () => {
     onSave(localSettings)
     onOpenChange(false)
   }
 
-  const updateSetting = <K extends keyof GameSettings>(
-    key: K,
-    value: GameSettings[K]
-  ) => {
-    setLocalSettings(prev => ({ ...prev, [key]: value }))
+  const clampSettings = (updatedSettings: GameSettings): GameSettings => {
+    const songsRequired = Math.max(1, Math.min(20, updatedSettings.songsRequired))
+    return {
+      ...updatedSettings,
+      songsRequired,
+      christmasSongsRequired: Math.min(updatedSettings.christmasSongsRequired, songsRequired),
+      recentSongsRequired: Math.min(updatedSettings.recentSongsRequired, songsRequired),
+    }
+  }
+
+  const updateSetting = <K extends keyof GameSettings>(key: K, value: GameSettings[K]) => {
+    setLocalSettings(prev => clampSettings({ ...prev, [key]: value }))
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Game Settings</DialogTitle>
           <DialogDescription>
@@ -54,21 +67,19 @@ export function GameSettingsModal({
 
         <div className="space-y-6 py-4">
           {/* Songs Required */}
-          <div className="space-y-2">
-            <Label>Songs per player</Label>
-            <div className="flex gap-2">
-              {([5, 10, 15] as const).map(num => (
-                <Button
-                  key={num}
-                  variant={localSettings.songsRequired === num ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => updateSetting('songsRequired', num)}
-                  className="flex-1"
-                >
-                  {num}
-                </Button>
-              ))}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Songs per player</Label>
+              <span className="text-sm font-medium">{localSettings.songsRequired}</span>
             </div>
+            <Slider
+              value={[localSettings.songsRequired]}
+              onValueChange={([value]) => updateSetting('songsRequired', value)}
+              max={20}
+              min={1}
+              step={1}
+              className="w-full"
+            />
           </div>
 
           {/* Christmas Songs Required */}
@@ -76,7 +87,7 @@ export function GameSettingsModal({
             <div className="flex items-center justify-between">
               <Label>Required Christmas songs</Label>
               <span className="text-sm font-medium">
-                {(localSettings.christmasSongsRequired ?? 0) === 0
+                {localSettings.christmasSongsRequired === 0
                   ? 'None'
                   : localSettings.christmasSongsRequired === localSettings.songsRequired
                     ? 'All'
@@ -84,7 +95,7 @@ export function GameSettingsModal({
               </span>
             </div>
             <Slider
-              value={[localSettings.christmasSongsRequired ?? 0]}
+              value={[localSettings.christmasSongsRequired]}
               onValueChange={([value]) => updateSetting('christmasSongsRequired', value)}
               max={localSettings.songsRequired}
               min={0}
@@ -96,18 +107,88 @@ export function GameSettingsModal({
             </p>
           </div>
 
-          {/* Chameleon Mode */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Chameleon Mode</Label>
-              <p className="text-xs text-muted-foreground">
-                Pick one song disguised as someone else&apos;s taste - score if they guess wrong!
-              </p>
+          {/* Recent Songs Required */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Songs from this year</Label>
+              <span className="text-sm font-medium">
+                {localSettings.recentSongsRequired === 0
+                  ? 'Off'
+                  : localSettings.recentSongsRequired}
+              </span>
             </div>
-            <Switch
-              checked={localSettings.chameleonMode}
-              onCheckedChange={(checked) => updateSetting('chameleonMode', checked)}
+            <Slider
+              value={[localSettings.recentSongsRequired]}
+              onValueChange={([value]) => updateSetting('recentSongsRequired', value)}
+              max={localSettings.songsRequired}
+              min={0}
+              step={1}
+              className="w-full"
             />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Chameleon Mode */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label>Chameleon Mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  Pick one song disguised as someone else&apos;s taste.
+                </p>
+              </div>
+              <Switch
+                checked={localSettings.chameleonMode}
+                onCheckedChange={(checked) => updateSetting('chameleonMode', checked)}
+              />
+            </div>
+
+            {/* Allow Duplicates */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label>Allow duplicate songs</Label>
+                <p className="text-xs text-muted-foreground">Multiple players can pick the same song.</p>
+              </div>
+              <Switch
+                checked={localSettings.allowDuplicateSongs}
+                onCheckedChange={(checked) => updateSetting('allowDuplicateSongs', checked)}
+              />
+            </div>
+
+            {/* Reveal After Each Round */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label>Reveal answers</Label>
+                <p className="text-xs text-muted-foreground">Show who picked each song after voting.</p>
+              </div>
+              <Switch
+                checked={localSettings.revealAfterEachRound}
+                onCheckedChange={(checked) => updateSetting('revealAfterEachRound', checked)}
+              />
+            </div>
+
+            {/* Lobby Music */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label>Lobby music</Label>
+                <p className="text-xs text-muted-foreground">Play festive music while waiting.</p>
+              </div>
+              <Switch
+                checked={localSettings.lobbyMusic}
+                onCheckedChange={(checked) => updateSetting('lobbyMusic', checked)}
+              />
+            </div>
+
+            {/* Snow Effect */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label>Snow effect</Label>
+                <p className="text-xs text-muted-foreground">Falling snow animation in the background.</p>
+              </div>
+              <Switch
+                checked={localSettings.snowEffect}
+                onCheckedChange={(checked) => updateSetting('snowEffect', checked)}
+              />
+            </div>
           </div>
 
           {/* Guess Timer */}
@@ -150,66 +231,19 @@ export function GameSettingsModal({
             </div>
           </div>
 
-          {/* Reveal After Each Round */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Reveal answers</Label>
-              <p className="text-xs text-muted-foreground">
-                Show who picked each song after voting
-              </p>
-            </div>
-            <Switch
-              checked={localSettings.revealAfterEachRound}
-              onCheckedChange={(checked) => updateSetting('revealAfterEachRound', checked)}
-            />
-          </div>
-
-          {/* Allow Duplicates */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Allow duplicate songs</Label>
-              <p className="text-xs text-muted-foreground">
-                Multiple players can pick the same song
-              </p>
-            </div>
-            <Switch
-              checked={localSettings.allowDuplicateSongs}
-              onCheckedChange={(checked) => updateSetting('allowDuplicateSongs', checked)}
-            />
-          </div>
-
-          {/* Lobby Music */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Lobby music</Label>
-              <p className="text-xs text-muted-foreground">
-                Play festive music while waiting
-              </p>
-            </div>
-            <Switch
-              checked={localSettings.lobbyMusic}
-              onCheckedChange={(checked) => updateSetting('lobbyMusic', checked)}
-            />
-          </div>
-
           {/* Trivia Round */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Trivia round</Label>
-              <p className="text-xs text-muted-foreground">
-                Add trivia questions between song halves
-              </p>
+          <div className="space-y-2">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label>Trivia round</Label>
+                <p className="text-xs text-muted-foreground">Add trivia questions between song halves.</p>
+              </div>
+              <Switch
+                checked={localSettings.triviaEnabled}
+                onCheckedChange={(checked) => updateSetting('triviaEnabled', checked)}
+              />
             </div>
-            <Switch
-              checked={localSettings.triviaEnabled}
-              onCheckedChange={(checked) => updateSetting('triviaEnabled', checked)}
-            />
-          </div>
-
-          {/* Trivia Question Count */}
-          {localSettings.triviaEnabled && (
-            <div className="space-y-2">
-              <Label>Trivia questions</Label>
+            {localSettings.triviaEnabled && (
               <div className="flex gap-2">
                 {([5, 10] as const).map(num => (
                   <Button
@@ -219,20 +253,44 @@ export function GameSettingsModal({
                     onClick={() => updateSetting('triviaQuestionCount', num)}
                     className="flex-1"
                   >
-                    {num}
+                    {num} questions
                   </Button>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Theme colour */}
+          <div className="space-y-2">
+            <Label>Theme colour</Label>
+            <div className="grid grid-cols-5 gap-2">
+              {([
+                { value: 'green', label: '🌲', bg: 'bg-green-600' },
+                { value: 'red', label: '🎅', bg: 'bg-red-600' },
+                { value: 'blue', label: '❄️', bg: 'bg-blue-600' },
+                { value: 'purple', label: '🔮', bg: 'bg-purple-600' },
+                { value: 'gold', label: '⭐', bg: 'bg-yellow-600' },
+              ] as const).map(({ value, label, bg }) => (
+                <Button
+                  key={value}
+                  variant={localSettings.themeColor === value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => updateSetting('themeColor', value)}
+                  className={`flex-1 ${localSettings.themeColor === value ? bg : ''}`}
+                >
+                  {label}
+                </Button>
+              ))}
             </div>
-          )}
+          </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>
-            Save Settings
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save settings'}
           </Button>
         </DialogFooter>
       </DialogContent>
