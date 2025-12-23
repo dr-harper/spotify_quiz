@@ -13,8 +13,8 @@ import { calculateAwards } from './award-reveal'
 import type { Room, Participant, Submission } from '@/types/database'
 
 // Chameleon scoring constants (must match results-reveal.tsx)
-const CHAMELEON_BONUS_PER_WRONG_GUESS = 75
-const CHAMELEON_PENALTY_PER_CORRECT_GUESS = 50
+const CHAMELEON_BONUS_PER_MATCH = 100  // Bonus for each player who guessed your declared target
+const CHAMELEON_PENALTY_PER_CAUGHT = 125  // Penalty for each player who guessed you correctly
 
 interface SubmissionWithParticipant extends Submission {
   participant: Participant
@@ -38,11 +38,17 @@ interface RoundScore {
   [participantName: string]: number
 }
 
+interface ChameleonVotes {
+  declaredTargetId: string | null  // Who the owner declared as their target
+  targetVoterIds: string[]         // IDs of other voters who also voted for target
+}
+
 interface RoundDetail {
   roundNumber: number
   submission: Submission
   correctParticipant: Participant
   correctVoters: Participant[]
+  chameleonVotes?: ChameleonVotes  // Only present for chameleon songs
 }
 
 export function ResultsView({
@@ -140,10 +146,10 @@ export function ResultsView({
           // Find all votes for this round
           const roundVotes = allVotes?.filter(v => v.round_id === round.id) || []
 
-          // Find correct voter IDs
+          // Find correct voter IDs (voters who guessed the owner)
           const correctVoterIds: string[] = []
           roundVotes.forEach(vote => {
-            if (vote.is_correct) {
+            if (vote.is_correct === true) {
               correctVoterIds.push(vote.voter_id)
             }
           })
@@ -153,11 +159,36 @@ export function ResultsView({
           const correctParticipant = participants.find(p => p.id === submission.participant_id)!
           const correctVoters = participants.filter(p => correctVoterIds.includes(p.id))
 
+          // Build chameleon votes info if this is a chameleon song
+          let chameleonVotes: ChameleonVotes | undefined
+          if (submission.is_chameleon) {
+            // Find owner's vote (is_correct = null indicates target declaration)
+            const ownerVote = roundVotes.find(
+              v => v.voter_id === correctParticipant.id && v.is_correct === null
+            )
+            const declaredTargetId = ownerVote?.guessed_participant_id || null
+
+            // Find other voters who voted for the same target
+            const targetVoterIds: string[] = []
+            if (declaredTargetId) {
+              roundVotes.forEach(vote => {
+                // Non-owner votes that guessed the same target
+                if (vote.voter_id !== correctParticipant.id &&
+                    vote.guessed_participant_id === declaredTargetId) {
+                  targetVoterIds.push(vote.voter_id)
+                }
+              })
+            }
+
+            chameleonVotes = { declaredTargetId, targetVoterIds }
+          }
+
           details.push({
             roundNumber: round.round_number,
             submission,
             correctParticipant,
             correctVoters,
+            chameleonVotes,
           })
         })
 
@@ -269,14 +300,14 @@ export function ResultsView({
       })
 
       // Add chameleon scoring
-      if (round.submission.is_chameleon) {
+      if (round.submission.is_chameleon && round.chameleonVotes) {
         const ownerId = round.correctParticipant.id
-        const correctGuesses = round.correctVoters.length
-        const potentialVoters = participants.length - 1
-        const wrongGuesses = potentialVoters - correctGuesses
+        const { targetVoterIds } = round.chameleonVotes
+        const matchCount = targetVoterIds.length  // Players who matched owner's target
+        const caughtCount = round.correctVoters.length  // Players who guessed owner
 
-        const bonus = wrongGuesses * CHAMELEON_BONUS_PER_WRONG_GUESS
-        const penalty = correctGuesses * CHAMELEON_PENALTY_PER_CORRECT_GUESS
+        const bonus = matchCount * CHAMELEON_BONUS_PER_MATCH
+        const penalty = caughtCount * CHAMELEON_PENALTY_PER_CAUGHT
         scores[ownerId] = (scores[ownerId] || 0) + bonus - penalty
       }
     })

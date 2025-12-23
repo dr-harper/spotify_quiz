@@ -85,9 +85,10 @@
   /* Festive dark theme - deep green background with red/gold accents */
   --background: oklch(0.15 0.03 150);
   --foreground: oklch(0.95 0.02 100);
-  --card: oklch(0.18 0.04 150);
+  /* Glassy cards - semi-transparent for backdrop-blur effect */
+  --card: oklch(0.18 0.04 150 / 0.7);
   --card-foreground: oklch(0.95 0.02 100);
-  --popover: oklch(0.18 0.04 150);
+  --popover: oklch(0.18 0.04 150 / 0.85);
   --popover-foreground: oklch(0.95 0.02 100);
   /* Primary - Christmas red */
   --primary: oklch(0.55 0.22 25);
@@ -119,11 +120,60 @@
   --sidebar-ring: oklch(0.55 0.22 25);
 }
 
+/* Theme colour variations */
+.dark.theme-green {
+  --primary: oklch(0.55 0.18 145);
+  --ring: oklch(0.55 0.18 145);
+  --sidebar-primary: oklch(0.55 0.18 145);
+  --sidebar-ring: oklch(0.55 0.18 145);
+}
+
+.dark.theme-red {
+  --primary: oklch(0.55 0.22 25);
+  --ring: oklch(0.55 0.22 25);
+  --sidebar-primary: oklch(0.55 0.22 25);
+  --sidebar-ring: oklch(0.55 0.22 25);
+}
+
+.dark.theme-blue {
+  --primary: oklch(0.55 0.2 240);
+  --ring: oklch(0.55 0.2 240);
+  --sidebar-primary: oklch(0.55 0.2 240);
+  --sidebar-ring: oklch(0.55 0.2 240);
+}
+
+.dark.theme-purple {
+  --primary: oklch(0.55 0.2 300);
+  --ring: oklch(0.55 0.2 300);
+  --sidebar-primary: oklch(0.55 0.2 300);
+  --sidebar-ring: oklch(0.55 0.2 300);
+}
+
+.dark.theme-gold {
+  --primary: oklch(0.75 0.15 85);
+  --ring: oklch(0.75 0.15 85);
+  --primary-foreground: oklch(0.15 0.03 150);
+  --sidebar-primary: oklch(0.75 0.15 85);
+  --sidebar-ring: oklch(0.75 0.15 85);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Glassy card effect - iOS style frosted glass */
+@layer components {
+  .dark [data-slot="card"],
+  .dark .card-glass {
+    @apply backdrop-blur-xl;
+    border: 1px solid oklch(1 0 0 / 0.1);
+    box-shadow:
+      0 4px 30px oklch(0 0 0 / 0.1),
+      inset 0 1px 0 oklch(1 0 0 / 0.05);
   }
 }

@@ -9,6 +9,12 @@ interface TrackInfo {
   isChristmas: boolean
 }
 
+// Fallback mood tags for when AI isn't available
+const FALLBACK_MOODS = [
+  'Playlist Pro', 'Vibe Curator', 'Tune Hunter', 'Music Maven',
+  'Beat Explorer', 'Sound Seeker', 'Rhythm Wizard', 'Song Sage'
+]
+
 export async function POST(request: NextRequest) {
   try {
     const { tracks, playerName } = await request.json() as { tracks: TrackInfo[]; playerName: string }
@@ -19,8 +25,10 @@ export async function POST(request: NextRequest) {
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
+      const randomMood = FALLBACK_MOODS[Math.floor(Math.random() * FALLBACK_MOODS.length)]
       return NextResponse.json({
         summary: "Great selection! Your friends will have fun guessing these.",
+        moodTag: randomMood,
         fallback: true,
       })
     }
@@ -41,8 +49,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (!model) {
+      const randomMood = FALLBACK_MOODS[Math.floor(Math.random() * FALLBACK_MOODS.length)]
       return NextResponse.json({
         summary: "Looking good! Your picks are ready to puzzle your friends.",
+        moodTag: randomMood,
         fallback: true,
       })
     }
@@ -53,8 +63,6 @@ export async function POST(request: NextRequest) {
     ).join('\n')
 
     const prompt = `You're a witty music commentator for a party game where friends guess who picked each song.
-Write a brief, playful 1-2 sentence summary of this player's song selections. Be fun and cheeky but not mean.
-Reference specific songs or patterns you notice. Keep it under 40 words.
 
 Player: ${playerName}
 ${christmasCount > 0 ? `(They marked ${christmasCount} as Christmas songs)` : ''}
@@ -62,18 +70,29 @@ ${christmasCount > 0 ? `(They marked ${christmasCount} as Christmas songs)` : ''
 Their picks:
 ${trackList}
 
-Write just the summary, no quotes or formatting. Be conversational and fun.`
+Respond with EXACTLY this format (no markdown, no extra text):
+SUMMARY: [A brief, playful 1-2 sentence summary. Be fun and cheeky but kind. Reference specific songs or patterns. Under 40 words.]
+MOOD: [A fun two-word mood descriptor like "Indie Dreamer", "Pop Royalty", "Retro Soul", "Emo Classic", "Dance Floor", "Sad Banger", etc. Be creative and playful!]`
 
     const result = await model.generateContent(prompt)
     const response = result.response
-    const summary = response.text().trim()
+    const text = response.text().trim()
 
-    return NextResponse.json({ summary })
+    // Parse the response
+    const summaryMatch = text.match(/SUMMARY:\s*(.+?)(?:\n|MOOD:|$)/)
+    const moodMatch = text.match(/MOOD:\s*(.+?)$/m)
+
+    const summary = summaryMatch ? summaryMatch[1].trim() : text
+    const moodTag = moodMatch ? moodMatch[1].trim().replace(/['"]/g, '') : 'Music Lover'
+
+    return NextResponse.json({ summary, moodTag })
 
   } catch (error) {
     console.error('Summary generation error:', error)
+    const randomMood = FALLBACK_MOODS[Math.floor(Math.random() * FALLBACK_MOODS.length)]
     return NextResponse.json({
       summary: "Interesting choices! Let's see if your friends can figure out your taste.",
+      moodTag: randomMood,
       fallback: true,
     })
   }

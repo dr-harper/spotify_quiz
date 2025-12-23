@@ -76,7 +76,7 @@ export function GameSettingsModal({
             <div className="flex items-center justify-between">
               <Label>Required Christmas songs</Label>
               <span className="text-sm font-medium">
-                {localSettings.christmasSongsRequired === 0
+                {(localSettings.christmasSongsRequired ?? 0) === 0
                   ? 'None'
                   : localSettings.christmasSongsRequired === localSettings.songsRequired
                     ? 'All'
@@ -84,7 +84,7 @@ export function GameSettingsModal({
               </span>
             </div>
             <Slider
-              value={[localSettings.christmasSongsRequired]}
+              value={[localSettings.christmasSongsRequired ?? 0]}
               onValueChange={([value]) => updateSetting('christmasSongsRequired', value)}
               max={localSettings.songsRequired}
               min={0}

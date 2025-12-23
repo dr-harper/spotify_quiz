@@ -1,5 +1,7 @@
 export type RoomStatus = 'LOBBY' | 'SUBMITTING' | 'PLAYING_ROUND_1' | 'TRIVIA' | 'PLAYING_ROUND_2' | 'RESULTS'
 
+export type ThemeColor = 'green' | 'red' | 'blue' | 'purple' | 'gold'
+
 export interface GameSettings {
   songsRequired: number // 1-20
   christmasSongsRequired: number // 0 = no requirement, up to songsRequired
@@ -12,6 +14,9 @@ export interface GameSettings {
   lobbyMusic: boolean
   triviaEnabled: boolean
   triviaQuestionCount: 5 | 10
+  // Visual settings
+  snowEffect: boolean
+  themeColor: ThemeColor
 }
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
@@ -26,6 +31,8 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   lobbyMusic: true,
   triviaEnabled: true,
   triviaQuestionCount: 10,
+  snowEffect: true,
+  themeColor: 'green',
 }
 
 export interface Room {
@@ -51,6 +58,9 @@ export interface Participant {
   is_host: boolean
   has_submitted: boolean
   created_at: string
+  // AI-generated music taste summary
+  ai_summary: string | null
+  mood_tag: string | null  // Two-word playful mood descriptor
 }
 
 export interface Submission {

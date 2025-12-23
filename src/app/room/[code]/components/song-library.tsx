@@ -172,29 +172,37 @@ export function SongLibrary({
       </div>
 
       {/* Participant Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {Object.values(participantStats).map(({ participant, count, avgPopularity, popCount }) => (
-          <Card key={participant.id} className="p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Avatar className="h-6 w-6">
+          <Card key={participant.id} className="p-4">
+            <div className="flex items-start gap-3">
+              <Avatar className="h-10 w-10 flex-shrink-0">
                 <AvatarImage src={participant.avatar_url || undefined} />
-                <AvatarFallback className="text-xs">
+                <AvatarFallback>
                   {participant.display_name.charAt(0)}
                 </AvatarFallback>
               </Avatar>
-              <span className="font-medium text-sm truncate">{participant.display_name}</span>
-            </div>
-            <div className="text-xs text-muted-foreground space-y-1">
-              <div className="flex justify-between">
-                <span>Songs:</span>
-                <span className="font-medium text-foreground">{count}</span>
-              </div>
-              {popCount > 0 && (
-                <div className="flex justify-between">
-                  <span>Avg popularity:</span>
-                  <span className="font-medium text-foreground">{Math.round(avgPopularity)}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold truncate">{participant.display_name}</span>
+                  {participant.mood_tag && (
+                    <Badge variant="secondary" className="text-xs">
+                      {participant.mood_tag}
+                    </Badge>
+                  )}
                 </div>
-              )}
+                {participant.ai_summary && (
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                    {participant.ai_summary}
+                  </p>
+                )}
+                <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                  <span>{count} songs</span>
+                  {popCount > 0 && (
+                    <span>Avg popularity: {Math.round(avgPopularity)}</span>
+                  )}
+                </div>
+              </div>
             </div>
           </Card>
         ))}

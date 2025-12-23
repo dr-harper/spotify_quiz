@@ -221,31 +221,7 @@ export function QuizView({
     }
   }, [currentRoundIndex, hasVoted, isLoading, rounds.length, settings.guessTimerSeconds])
 
-  // Auto-skip vote for chameleon song owner
-  useEffect(() => {
-    if (!rounds[currentRoundIndex]) return
-    const currentRound = rounds[currentRoundIndex]
-
-    // Check if this is the player's own chameleon song
-    const isOwnChameleon = settings.chameleonMode &&
-      currentRound.submission.is_chameleon &&
-      currentRound.submission.participant_id === currentParticipant.id
-
-    if (isOwnChameleon && !hasVoted) {
-      // Auto-mark as voted (no guess needed - they can't vote on their own song)
-      setHasVoted(true)
-      setWaitingForOthers(true)
-
-      // Record a "chameleon skip" vote in the database
-      supabase.from('votes').insert({
-        round_id: currentRound.round.id,
-        voter_id: currentParticipant.id,
-        guessed_participant_id: null, // No guess - this is their chameleon song
-        is_correct: null, // Not applicable
-        points_awarded: 0,
-      })
-    }
-  }, [currentRoundIndex, rounds, settings.chameleonMode, currentParticipant.id, hasVoted, supabase])
+  // Note: Chameleon song owners CAN vote - their vote declares who they were trying to imitate
 
   // Handle time expiry - auto-skip vote
   useEffect(() => {
@@ -351,32 +327,60 @@ export function QuizView({
     setWaitingForOthers(true)
 
     const currentRound = rounds[currentRoundIndex]
-    const isCorrect = participantId === currentRound.correctParticipant.id
 
-    // Record vote locally
-    setVotes(prev => [...prev, {
-      roundIndex: currentRoundIndex,
-      guessedId: participantId,
-      correctId: currentRound.correctParticipant.id,
-      isCorrect,
-      submission: currentRound.submission,
-    }])
+    // Check if this is the owner voting on their own chameleon song
+    const isOwnChameleon = settings.chameleonMode &&
+      currentRound.submission.is_chameleon &&
+      currentRound.submission.participant_id === currentParticipant.id
 
-    // Save vote to database
-    await supabase.from('votes').insert({
-      round_id: currentRound.round.id,
-      voter_id: currentParticipant.id,
-      guessed_participant_id: participantId,
-      is_correct: isCorrect,
-      points_awarded: isCorrect ? 100 : 0,
-    })
+    if (isOwnChameleon) {
+      // Owner is declaring their target - no points awarded directly
+      // Chameleon scoring happens during results reveal
+      setVotes(prev => [...prev, {
+        roundIndex: currentRoundIndex,
+        guessedId: participantId,
+        correctId: currentRound.correctParticipant.id,
+        isCorrect: false, // Not a guess, just target declaration
+        submission: currentRound.submission,
+      }])
 
-    // Update score
-    if (isCorrect) {
-      await supabase
-        .from('participants')
-        .update({ score: currentParticipant.score + 100 })
-        .eq('id', currentParticipant.id)
+      // Save vote to database - marks the owner's declared target
+      await supabase.from('votes').insert({
+        round_id: currentRound.round.id,
+        voter_id: currentParticipant.id,
+        guessed_participant_id: participantId,
+        is_correct: null, // null indicates this is a chameleon target declaration
+        points_awarded: 0,
+      })
+    } else {
+      // Normal vote - check if correct
+      const isCorrect = participantId === currentRound.correctParticipant.id
+
+      // Record vote locally
+      setVotes(prev => [...prev, {
+        roundIndex: currentRoundIndex,
+        guessedId: participantId,
+        correctId: currentRound.correctParticipant.id,
+        isCorrect,
+        submission: currentRound.submission,
+      }])
+
+      // Save vote to database
+      await supabase.from('votes').insert({
+        round_id: currentRound.round.id,
+        voter_id: currentParticipant.id,
+        guessed_participant_id: participantId,
+        is_correct: isCorrect,
+        points_awarded: isCorrect ? 100 : 0,
+      })
+
+      // Update score
+      if (isCorrect) {
+        await supabase
+          .from('participants')
+          .update({ score: currentParticipant.score + 100 })
+          .eq('id', currentParticipant.id)
+      }
     }
   }
 
@@ -488,9 +492,12 @@ export function QuizView({
                     🦎 Your Chameleon Song
                   </Badge>
                 </div>
-                <CardTitle className="text-center text-muted-foreground">
-                  Wait for others to guess...
+                <CardTitle className="text-center">
+                  Who were you trying to imitate?
                 </CardTitle>
+                <p className="text-center text-sm text-muted-foreground mt-1">
+                  +100 pts for each player who also picks them, −125 pts if someone guesses you
+                </p>
               </>
             ) : (
               <>
@@ -515,13 +522,41 @@ export function QuizView({
             )}
           </CardHeader>
           <CardContent>
-            {isOwnChameleonSong ? (
+            {isOwnChameleonSong && !hasVoted ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  {participants
+                    .filter(p => p.id !== currentParticipant.id) // Can't pick yourself
+                    .map(participant => (
+                      <Button
+                        key={participant.id}
+                        variant={selectedParticipant === participant.id ? "default" : "outline"}
+                        className="h-auto py-3 flex items-center gap-2"
+                        onClick={() => setSelectedParticipant(participant.id)}
+                      >
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={participant.avatar_url || undefined} />
+                          <AvatarFallback>{participant.display_name[0]}</AvatarFallback>
+                        </Avatar>
+                        <span className="truncate">{participant.display_name}</span>
+                      </Button>
+                    ))}
+                </div>
+                <Button
+                  onClick={() => selectedParticipant && handleVote(selectedParticipant)}
+                  disabled={!selectedParticipant}
+                  className="w-full"
+                >
+                  Confirm Target
+                </Button>
+              </div>
+            ) : isOwnChameleonSong && hasVoted ? (
               <div className="text-center space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  You can&apos;t vote on your own chameleon song.
+                  You declared <strong>{participants.find(p => p.id === selectedParticipant)?.display_name || 'your target'}</strong> as your imitation target.
                 </p>
                 <p className="text-sm">
-                  If others guess wrong, you&apos;ll earn bonus points!
+                  Waiting for others to guess...
                 </p>
                 {isHost && (
                   <Button

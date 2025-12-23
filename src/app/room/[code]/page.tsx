@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
 import type { Room, Participant, GameSettings } from '@/types/database'
+import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { LobbyView } from './components/lobby-view'
 import { SubmissionView } from './components/submission-view'
@@ -11,6 +12,7 @@ import { QuizView } from './components/quiz-view'
 import { TriviaView } from './components/trivia-view'
 import { ResultsView } from './components/results-view'
 import { useBackgroundMusic } from '@/components/background-music'
+import { FestiveBackground } from '@/components/festive-background'
 
 export default function RoomPage() {
   const params = useParams()
@@ -149,6 +151,25 @@ export default function RoomPage() {
       stopMusic()
     }
   }, [room?.status, playMusic, stopMusic, room])
+
+  // Apply theme colour class to document
+  const settings = room?.settings || DEFAULT_GAME_SETTINGS
+  const themeColor = settings.themeColor ?? 'green'
+  const showSnow = settings.snowEffect ?? true
+
+  useEffect(() => {
+    const html = document.documentElement
+    // Remove any existing theme classes
+    html.classList.remove('theme-green', 'theme-red', 'theme-blue', 'theme-purple', 'theme-gold')
+    // Add the new theme class
+    html.classList.add(`theme-${themeColor}`)
+
+    // Cleanup on unmount - reset to default green
+    return () => {
+      html.classList.remove('theme-green', 'theme-red', 'theme-blue', 'theme-purple', 'theme-gold')
+      html.classList.add('theme-green')
+    }
+  }, [themeColor])
 
   // Update room status (host only)
   const updateRoomStatus = async (status: Room['status']) => {
@@ -332,5 +353,10 @@ export default function RoomPage() {
     }
   }
 
-  return renderContent()
+  return (
+    <>
+      <FestiveBackground showSnow={showSnow} />
+      {renderContent()}
+    </>
+  )
 }

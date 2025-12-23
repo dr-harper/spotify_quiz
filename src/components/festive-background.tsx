@@ -1,5 +1,7 @@
 'use client'
 
+import { useState, useEffect } from 'react'
+
 interface Snowflake {
   id: number
   left: string
@@ -64,12 +66,32 @@ const generateStars = (): Star[] =>
     duration: seededRandom(i * 73 + 59) * 2 + 1,
   }))
 
-// Pre-generate all elements
-const SNOWFLAKES = generateSnowflakes()
-const DECORATIONS = generateDecorations()
-const STARS = generateStars()
+interface FestiveBackgroundProps {
+  showSnow?: boolean
+}
 
-export function FestiveBackground() {
+export function FestiveBackground({ showSnow = true }: FestiveBackgroundProps) {
+  // Generate elements only on client to avoid hydration mismatch
+  const [snowflakes, setSnowflakes] = useState<Snowflake[]>([])
+  const [decorations, setDecorations] = useState<Decoration[]>([])
+  const [stars, setStars] = useState<Star[]>([])
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setSnowflakes(generateSnowflakes())
+    setDecorations(generateDecorations())
+    setStars(generateStars())
+    setIsMounted(true)
+  }, [])
+
+  // Don't render anything until mounted to avoid hydration issues
+  if (!isMounted) {
+    return (
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-secondary/5" />
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
@@ -77,7 +99,7 @@ export function FestiveBackground() {
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-secondary/5" />
 
       {/* Falling snowflakes */}
-      {SNOWFLAKES.map((flake) => (
+      {showSnow && snowflakes.map((flake) => (
         <div
           key={flake.id}
           className="absolute animate-snowfall"
@@ -97,7 +119,7 @@ export function FestiveBackground() {
       ))}
 
       {/* Floating decorations */}
-      {DECORATIONS.map((deco) => (
+      {decorations.map((deco) => (
         <div
           key={deco.id}
           className="absolute animate-float"
@@ -114,7 +136,7 @@ export function FestiveBackground() {
       ))}
 
       {/* Twinkling stars effect */}
-      {STARS.map((star) => (
+      {stars.map((star) => (
         <div
           key={`star-${star.id}`}
           className="absolute animate-twinkle"

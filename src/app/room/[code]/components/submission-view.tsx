@@ -57,6 +57,7 @@ export function SubmissionView({
   const [chameleonTrackId, setChameleonTrackId] = useState<string | null>(null)
   const [christmasOverrides, setChristmasOverrides] = useState<Record<string, boolean>>({})
   const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const [moodTag, setMoodTag] = useState<string | null>(null)
   const [isLoadingSummary, setIsLoadingSummary] = useState(false)
   const [takenTrackIds, setTakenTrackIds] = useState<Set<string>>(new Set())
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -335,10 +336,11 @@ export function SubmissionView({
 
   const hasChameleonSelected = chameleonTrackId !== null
 
-  // Fetch AI summary when all songs are selected
+  // Fetch AI summary and mood tag when all songs are selected
   useEffect(() => {
     if (selectedTracks.length !== REQUIRED_SONGS) {
       setAiSummary(null)
+      setMoodTag(null)
       return
     }
 
@@ -361,6 +363,7 @@ export function SubmissionView({
         })
         const data = await response.json()
         setAiSummary(data.summary || null)
+        setMoodTag(data.moodTag || null)
       } catch (error) {
         console.error('Summary error:', error)
       } finally {
@@ -500,10 +503,14 @@ export function SubmissionView({
         throw submissionError
       }
 
-      // Mark participant as submitted
+      // Mark participant as submitted and save AI summary
       const { error: updateError } = await supabase
         .from('participants')
-        .update({ has_submitted: true })
+        .update({
+          has_submitted: true,
+          ai_summary: aiSummary,
+          mood_tag: moodTag,
+        })
         .eq('id', currentParticipant.id)
 
       if (updateError) throw updateError
@@ -531,10 +538,14 @@ export function SubmissionView({
         .delete()
         .eq('participant_id', currentParticipant.id)
 
-      // Mark participant as not submitted
+      // Mark participant as not submitted and clear AI summary
       await supabase
         .from('participants')
-        .update({ has_submitted: false })
+        .update({
+          has_submitted: false,
+          ai_summary: null,
+          mood_tag: null,
+        })
         .eq('id', currentParticipant.id)
 
       // Reset local state - keep the tracks so they can modify
@@ -545,6 +556,7 @@ export function SubmissionView({
       setChameleonTrackId(null)
       setChristmasOverrides({})
       setAiSummary(null)
+      setMoodTag(null)
     } catch (error) {
       console.error('Error editing submission:', error)
     } finally {
@@ -843,6 +855,43 @@ export function SubmissionView({
         <Progress value={(selectedTracks.length / REQUIRED_SONGS) * 100} />
       </div>
 
+      {/* Game Rules Explainer */}
+      <div className="w-full max-w-6xl mx-auto mt-4">
+        <div className="p-4 rounded-lg bg-card/90 backdrop-blur-md border border-white/10 space-y-2">
+          <p className="text-sm">
+            Pick songs that represent your taste — your friends will try to guess which ones are yours!
+          </p>
+          {(CHAMELEON_MODE || REQUIRED_CHRISTMAS > 0 || REQUIRED_RECENT > 0 || !ALLOW_DUPLICATES) && (
+            <ul className="text-sm text-muted-foreground space-y-1">
+              {CHAMELEON_MODE && (
+                <li className="flex items-start gap-2">
+                  <span>🦎</span>
+                  <span>Pick one song disguised as someone else&apos;s taste. Score bonus points if they guess wrong!</span>
+                </li>
+              )}
+              {REQUIRED_CHRISTMAS > 0 && (
+                <li className="flex items-start gap-2">
+                  <span>🎄</span>
+                  <span>At least {REQUIRED_CHRISTMAS} song{REQUIRED_CHRISTMAS > 1 ? 's' : ''} must be Christmas songs</span>
+                </li>
+              )}
+              {REQUIRED_RECENT > 0 && (
+                <li className="flex items-start gap-2">
+                  <span>📅</span>
+                  <span>At least {REQUIRED_RECENT} song{REQUIRED_RECENT > 1 ? 's' : ''} must be from {CURRENT_YEAR}</span>
+                </li>
+              )}
+              {!ALLOW_DUPLICATES && (
+                <li className="flex items-start gap-2">
+                  <span>🚫</span>
+                  <span>Songs already picked by others won&apos;t appear in search</span>
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
+      </div>
+
       {/* Two-column layout */}
       <div className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-5 gap-6 mt-4">
         {/* Left Column - Search (3/5 width on large screens) */}
@@ -1064,16 +1113,18 @@ export function SubmissionView({
                           </div>
                           {/* Action buttons */}
                           <div className="flex items-center gap-1">
-                            {/* Christmas toggle */}
-                            <Button
-                              variant={isChristmas ? 'default' : 'ghost'}
-                              size="sm"
-                              onClick={() => toggleChristmas(track)}
-                              className={`h-7 w-7 p-0 ${isChristmas ? 'bg-green-600 hover:bg-green-700' : 'hover:bg-green-500/20'}`}
-                              title={isChristmas ? 'Marked as Christmas song (click to remove)' : 'Mark as Christmas song'}
-                            >
-                              🎄
-                            </Button>
+                            {/* Christmas toggle - only show if Christmas songs required */}
+                            {REQUIRED_CHRISTMAS > 0 && (
+                              <Button
+                                variant={isChristmas ? 'default' : 'ghost'}
+                                size="sm"
+                                onClick={() => toggleChristmas(track)}
+                                className={`h-7 w-7 p-0 ${isChristmas ? 'bg-green-600 hover:bg-green-700' : 'hover:bg-green-500/20'}`}
+                                title={isChristmas ? 'Marked as Christmas song (click to remove)' : 'Mark as Christmas song'}
+                              >
+                                🎄
+                              </Button>
+                            )}
                             {/* Chameleon toggle */}
                             {CHAMELEON_MODE && (
                               <Button

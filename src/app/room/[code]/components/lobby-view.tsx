@@ -231,7 +231,35 @@ Join: ${url}`
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Songs per player</Label>
-                    <span className="text-sm font-medium">{settings.songsRequired}</span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => {
+                          const newVal = Math.max(1, settings.songsRequired - 1)
+                          updateSetting('songsRequired', newVal)
+                          if (settings.christmasSongsRequired > newVal) {
+                            updateSetting('christmasSongsRequired', newVal)
+                          }
+                        }}
+                        disabled={settings.songsRequired <= 1}
+                      >
+                        −
+                      </Button>
+                      <span className="text-sm font-medium w-6 text-center">{settings.songsRequired}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => {
+                          updateSetting('songsRequired', Math.min(20, settings.songsRequired + 1))
+                        }}
+                        disabled={settings.songsRequired >= 20}
+                      >
+                        +
+                      </Button>
+                    </div>
                   </div>
                   <Slider
                     value={[settings.songsRequired]}
@@ -253,16 +281,32 @@ Join: ${url}`
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Required Christmas songs</Label>
-                    <span className="text-sm font-medium">
-                      {settings.christmasSongsRequired === 0
-                        ? 'None'
-                        : settings.christmasSongsRequired === settings.songsRequired
-                          ? 'All'
-                          : settings.christmasSongsRequired}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => updateSetting('christmasSongsRequired', Math.max(0, (settings.christmasSongsRequired ?? 0) - 1))}
+                        disabled={(settings.christmasSongsRequired ?? 0) <= 0}
+                      >
+                        −
+                      </Button>
+                      <span className="text-sm font-medium w-8 text-center">
+                        {(settings.christmasSongsRequired ?? 0) === 0 ? 'Off' : settings.christmasSongsRequired}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => updateSetting('christmasSongsRequired', Math.min(settings.songsRequired, (settings.christmasSongsRequired ?? 0) + 1))}
+                        disabled={(settings.christmasSongsRequired ?? 0) >= settings.songsRequired}
+                      >
+                        +
+                      </Button>
+                    </div>
                   </div>
                   <Slider
-                    value={[settings.christmasSongsRequired]}
+                    value={[settings.christmasSongsRequired ?? 0]}
                     onValueChange={([value]) => updateSetting('christmasSongsRequired', value)}
                     max={settings.songsRequired}
                     min={0}
@@ -275,16 +319,32 @@ Join: ${url}`
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm">Songs from this year</Label>
-                    <span className="text-sm font-medium">
-                      {settings.recentSongsRequired === 0
-                        ? 'None'
-                        : settings.recentSongsRequired === settings.songsRequired
-                          ? 'All'
-                          : settings.recentSongsRequired}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => updateSetting('recentSongsRequired', Math.max(0, (settings.recentSongsRequired ?? 0) - 1))}
+                        disabled={(settings.recentSongsRequired ?? 0) <= 0}
+                      >
+                        −
+                      </Button>
+                      <span className="text-sm font-medium w-8 text-center">
+                        {(settings.recentSongsRequired ?? 0) === 0 ? 'Off' : settings.recentSongsRequired}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => updateSetting('recentSongsRequired', Math.min(settings.songsRequired, (settings.recentSongsRequired ?? 0) + 1))}
+                        disabled={(settings.recentSongsRequired ?? 0) >= settings.songsRequired}
+                      >
+                        +
+                      </Button>
+                    </div>
                   </div>
                   <Slider
-                    value={[settings.recentSongsRequired || 0]}
+                    value={[settings.recentSongsRequired ?? 0]}
                     onValueChange={([value]) => updateSetting('recentSongsRequired', value)}
                     max={settings.songsRequired}
                     min={0}
@@ -397,6 +457,45 @@ Join: ${url}`
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Visual Settings */}
+                <div className="space-y-4 pt-4 border-t">
+                  <Label className="text-sm font-medium">Visual Settings</Label>
+
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Snow effect</Label>
+                      <p className="text-xs text-muted-foreground">Falling snow animation in background</p>
+                    </div>
+                    <Switch
+                      checked={settings.snowEffect ?? true}
+                      onCheckedChange={(checked) => updateSetting('snowEffect', checked)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm">Theme colour</Label>
+                    <div className="flex gap-2">
+                      {([
+                        { value: 'green', label: '🌲', bg: 'bg-green-600' },
+                        { value: 'red', label: '🎅', bg: 'bg-red-600' },
+                        { value: 'blue', label: '❄️', bg: 'bg-blue-600' },
+                        { value: 'purple', label: '🔮', bg: 'bg-purple-600' },
+                        { value: 'gold', label: '⭐', bg: 'bg-yellow-600' },
+                      ] as const).map(({ value, label, bg }) => (
+                        <Button
+                          key={value}
+                          variant={(settings.themeColor ?? 'green') === value ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => updateSetting('themeColor', value)}
+                          className={`flex-1 ${(settings.themeColor ?? 'green') === value ? bg : ''}`}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </>
             ) : (

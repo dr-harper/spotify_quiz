@@ -14,7 +14,8 @@ interface SongRevealCardProps {
   totalRounds: number
   phase: 'part1' | 'part2'
   onAudioEnd?: () => void
-  chameleonResult?: { points: number; wrongGuesses: number; correctGuesses: number } | null
+  chameleonResult?: { points: number; matchCount: number; caughtCount: number; declaredTargetId: string | null } | null
+  participants?: Participant[]  // Needed to show target name
 }
 
 const PLAYER_COLOURS = [
@@ -31,6 +32,7 @@ export function SongRevealCard({
   phase,
   onAudioEnd,
   chameleonResult,
+  participants,
 }: SongRevealCardProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -163,9 +165,17 @@ export function SongRevealCard({
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {chameleonResult.wrongGuesses > 0 && `Fooled ${chameleonResult.wrongGuesses} player${chameleonResult.wrongGuesses > 1 ? 's' : ''}`}
-              {chameleonResult.wrongGuesses > 0 && chameleonResult.correctGuesses > 0 && ' • '}
-              {chameleonResult.correctGuesses > 0 && `Caught by ${chameleonResult.correctGuesses}`}
+              {chameleonResult.declaredTargetId && participants && (
+                <>
+                  Imitating: <span className="font-medium text-foreground">
+                    {participants.find(p => p.id === chameleonResult.declaredTargetId)?.display_name ?? 'Unknown'}
+                  </span>
+                  {(chameleonResult.matchCount > 0 || chameleonResult.caughtCount > 0) && ' • '}
+                </>
+              )}
+              {chameleonResult.matchCount > 0 && `${chameleonResult.matchCount} matched target (+${chameleonResult.matchCount * 100})`}
+              {chameleonResult.matchCount > 0 && chameleonResult.caughtCount > 0 && ' • '}
+              {chameleonResult.caughtCount > 0 && `Caught by ${chameleonResult.caughtCount} (-${chameleonResult.caughtCount * 125})`}
             </p>
           </div>
         )}

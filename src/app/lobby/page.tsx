@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
+import { FestiveBackground } from '@/components/festive-background'
 import { useBackgroundMusic } from '@/components/background-music'
 import { createClient } from '@/lib/supabase/client'
 import { generateRoomCode } from '@/lib/utils'
@@ -215,6 +216,7 @@ export default function LobbyPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center p-4 py-8">
+      <FestiveBackground showSnow={true} />
       <div className="w-full max-w-4xl">
         <div className="max-w-md mx-auto lg:max-w-none">
           <GameBreadcrumbs currentStage="join" />

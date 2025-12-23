@@ -9,35 +9,44 @@ import { AwardBadge, Award, calculateAwards } from './award-reveal'
 import { WinnerReveal } from './winner-reveal'
 import type { Participant, Submission } from '@/types/database'
 
+interface ChameleonVotes {
+  declaredTargetId: string | null  // Who the owner declared as their target
+  targetVoterIds: string[]         // IDs of other voters who also voted for target
+}
+
 interface RoundDetail {
   roundNumber: number
   submission: Submission
   correctParticipant: Participant
   correctVoters: Participant[]
+  chameleonVotes?: ChameleonVotes  // Only present for chameleon songs
 }
 
 // Chameleon scoring constants
-const CHAMELEON_BONUS_PER_WRONG_GUESS = 75  // Bonus for each player you fooled
-const CHAMELEON_PENALTY_PER_CORRECT_GUESS = 50  // Penalty for each player who caught you
+const CHAMELEON_BONUS_PER_MATCH = 100  // Bonus for each player who guessed your declared target
+const CHAMELEON_PENALTY_PER_CAUGHT = 125  // Penalty for each player who guessed you correctly
 
 // Calculate chameleon points for a round
+// New scoring: owner declares target, +100 for each match, -125 for each catch
 function calculateChameleonPoints(
-  round: RoundDetail,
-  totalSubmittedParticipants: number
-): { ownerId: string; points: number; wrongGuesses: number; correctGuesses: number } | null {
+  round: RoundDetail
+): { ownerId: string; points: number; matchCount: number; caughtCount: number; declaredTargetId: string | null } | null {
   if (!round.submission.is_chameleon) return null
+  if (!round.chameleonVotes) return null
 
   const ownerId = round.correctParticipant.id
-  const correctGuesses = round.correctVoters.length
-  // Potential voters = all participants except the owner (who can't vote on their own song)
-  const potentialVoters = totalSubmittedParticipants - 1
-  const wrongGuesses = potentialVoters - correctGuesses
+  const { declaredTargetId, targetVoterIds } = round.chameleonVotes
 
-  const bonus = wrongGuesses * CHAMELEON_BONUS_PER_WRONG_GUESS
-  const penalty = correctGuesses * CHAMELEON_PENALTY_PER_CORRECT_GUESS
+  // Matches: how many other players also voted for the owner's declared target
+  const matchCount = targetVoterIds.length
+  // Caught: how many players correctly guessed the owner
+  const caughtCount = round.correctVoters.length
+
+  const bonus = matchCount * CHAMELEON_BONUS_PER_MATCH
+  const penalty = caughtCount * CHAMELEON_PENALTY_PER_CAUGHT
   const points = bonus - penalty
 
-  return { ownerId, points, wrongGuesses, correctGuesses }
+  return { ownerId, points, matchCount, caughtCount, declaredTargetId }
 }
 
 interface ResultsRevealProps {
@@ -100,7 +109,7 @@ export function ResultsReveal({
       })
 
       // Add chameleon scoring
-      const chameleonResult = calculateChameleonPoints(round, participants.length)
+      const chameleonResult = calculateChameleonPoints(round)
       if (chameleonResult) {
         scores[chameleonResult.ownerId] = (scores[chameleonResult.ownerId] || 0) + chameleonResult.points
       }
@@ -144,7 +153,7 @@ export function ResultsReveal({
             next[voter.id] = (next[voter.id] || 0) + 100
           })
           // Chameleon scoring
-          const chameleonResult = calculateChameleonPoints(round, participants.length)
+          const chameleonResult = calculateChameleonPoints(round)
           if (chameleonResult) {
             next[chameleonResult.ownerId] = (next[chameleonResult.ownerId] || 0) + chameleonResult.points
           }
@@ -189,7 +198,7 @@ export function ResultsReveal({
             next[voter.id] = (next[voter.id] || 0) + 100
           })
           // Chameleon scoring
-          const chameleonResult = calculateChameleonPoints(round, participants.length)
+          const chameleonResult = calculateChameleonPoints(round)
           if (chameleonResult) {
             next[chameleonResult.ownerId] = (next[chameleonResult.ownerId] || 0) + chameleonResult.points
           }
@@ -231,7 +240,7 @@ export function ResultsReveal({
     if (phase === 'part1') {
       const round = part1Rounds[currentIndex]
       if (!round) return null
-      const chameleonResult = calculateChameleonPoints(round, participants.length)
+      const chameleonResult = calculateChameleonPoints(round)
       return (
         <SongRevealCard
           submission={round.submission}
@@ -242,6 +251,7 @@ export function ResultsReveal({
           phase="part1"
           onAudioEnd={isAutoPlaying ? advanceToNext : undefined}
           chameleonResult={chameleonResult}
+          participants={participants}
         />
       )
     }
@@ -280,7 +290,7 @@ export function ResultsReveal({
     if (phase === 'part2') {
       const round = part2Rounds[currentIndex]
       if (!round) return null
-      const chameleonResult = calculateChameleonPoints(round, participants.length)
+      const chameleonResult = calculateChameleonPoints(round)
       return (
         <SongRevealCard
           submission={round.submission}
@@ -291,6 +301,7 @@ export function ResultsReveal({
           phase="part2"
           onAudioEnd={isAutoPlaying ? advanceToNext : undefined}
           chameleonResult={chameleonResult}
+          participants={participants}
         />
       )
     }
