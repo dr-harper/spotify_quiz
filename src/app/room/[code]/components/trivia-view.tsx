@@ -361,12 +361,12 @@ export function TriviaView({
                   onClick={() => !hasAnswered && handleAnswer(index)}
                   disabled={hasAnswered}
                   variant={buttonVariant}
-                  className={`w-full h-auto py-3 text-left justify-start ${extraClasses}`}
+                  className={`w-full h-auto min-h-[48px] py-3 text-left justify-start whitespace-normal ${extraClasses}`}
                 >
-                  <span className="font-bold mr-3">{String.fromCharCode(65 + index)}.</span>
-                  <span className="flex-1">{option}</span>
-                  {showResult && isCorrect && <span className="ml-2">✓</span>}
-                  {showResult && isSelected && !isCorrect && <span className="ml-2">✗</span>}
+                  <span className="font-bold mr-3 shrink-0">{String.fromCharCode(65 + index)}.</span>
+                  <span className="flex-1 break-words">{option}</span>
+                  {showResult && isCorrect && <span className="ml-2 shrink-0">✓</span>}
+                  {showResult && isSelected && !isCorrect && <span className="ml-2 shrink-0">✗</span>}
                 </Button>
               )
             })}

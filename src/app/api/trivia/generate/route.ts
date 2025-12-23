@@ -47,21 +47,47 @@ function generateDataQuestions(tracks: TrackData[]): GeneratedQuestion[] {
   if (tracks.length < 4) return questions
 
   // 1. Artist Match - "Who sang this song?"
-  const trackForArtist = shuffle(tracks)[0]
-  const otherArtists = shuffle(tracks.filter(t => t.artist !== trackForArtist.artist))
-    .slice(0, 3)
-    .map(t => t.artist)
-  if (otherArtists.length === 3) {
-    const artistOptions = shuffle([trackForArtist.artist, ...otherArtists]) as [string, string, string, string]
-    questions.push({
-      question_type: 'data',
-      category: 'artist',
-      question_text: `Who sang "${trackForArtist.name}"?`,
-      options: artistOptions,
-      correct_index: artistOptions.indexOf(trackForArtist.artist),
-      explanation: `"${trackForArtist.name}" was performed by ${trackForArtist.artist}`,
-      related_track_id: trackForArtist.id,
-    })
+  // Get unique artists to ensure we have 4 different options
+  const uniqueArtists = [...new Set(tracks.map(t => t.artist))]
+  if (uniqueArtists.length >= 4) {
+    const trackForArtist = shuffle(tracks)[0]
+    // Get 3 OTHER unique artists (not the correct one)
+    const otherArtists = shuffle(uniqueArtists.filter(a => a !== trackForArtist.artist)).slice(0, 3)
+
+    if (otherArtists.length === 3) {
+      const artistOptions = shuffle([trackForArtist.artist, ...otherArtists]) as [string, string, string, string]
+      // Only use the song name - never include artist in the question
+      const songNameOnly = trackForArtist.name
+      questions.push({
+        question_type: 'data',
+        category: 'artist',
+        question_text: `Who performed "${songNameOnly}"?`,
+        options: artistOptions,
+        correct_index: artistOptions.indexOf(trackForArtist.artist),
+        explanation: `"${songNameOnly}" was performed by ${trackForArtist.artist}`,
+        related_track_id: trackForArtist.id,
+      })
+    }
+  }
+
+  // 1b. Second artist question with different wording
+  if (uniqueArtists.length >= 4) {
+    const availableTracks = shuffle(tracks)
+    const trackForArtist2 = availableTracks[1] || availableTracks[0]
+    const otherArtists2 = shuffle(uniqueArtists.filter(a => a !== trackForArtist2.artist)).slice(0, 3)
+
+    if (otherArtists2.length === 3) {
+      const artistOptions2 = shuffle([trackForArtist2.artist, ...otherArtists2]) as [string, string, string, string]
+      questions.push({
+        question_type: 'data',
+        category: 'artist',
+        question_text: `Which artist recorded "${trackForArtist2.name}"?`,
+        options: artistOptions2,
+        correct_index: artistOptions2.indexOf(trackForArtist2.artist),
+        explanation: `"${trackForArtist2.name}" was recorded by ${trackForArtist2.artist}`,
+        related_track_id: trackForArtist2.id,
+      })
+    }
   }
 
   // 2. Oldest Song - "Which song was released first?"
@@ -149,6 +175,44 @@ function generateDataQuestions(tracks: TrackData[]): GeneratedQuestion[] {
       correct_index: decades.indexOf(`${correctDecade}s`),
       explanation: `"${track.name}" was released in ${track.releaseYear}`,
       related_track_id: track.id,
+    })
+  }
+
+  // 8. Match song to artist (reverse of artist question)
+  if (uniqueArtists.length >= 4) {
+    const artistForSong = shuffle(tracks)[0]
+    // Get songs from different artists
+    const otherSongs = shuffle(tracks.filter(t => t.artist !== artistForSong.artist))
+      .slice(0, 3)
+    if (otherSongs.length === 3) {
+      // Only show song names, not "Song - Artist"
+      const songOptions = shuffle([artistForSong.name, ...otherSongs.map(t => t.name)]) as [string, string, string, string]
+      questions.push({
+        question_type: 'data',
+        category: 'artist',
+        question_text: `Which of these songs was performed by ${artistForSong.artist}?`,
+        options: songOptions,
+        correct_index: songOptions.indexOf(artistForSong.name),
+        explanation: `${artistForSong.artist} performed "${artistForSong.name}"`,
+        related_track_id: artistForSong.id,
+      })
+    }
+  }
+
+  // 9. Shortest track
+  if (tracksWithDuration.length >= 4) {
+    const selected = shuffle(tracksWithDuration).slice(0, 4)
+    const sorted = [...selected].sort((a, b) => (a.durationMs || 0) - (b.durationMs || 0))
+    const shortest = sorted[0]
+    const options = selected.map(t => t.name) as [string, string, string, string]
+    questions.push({
+      question_type: 'data',
+      category: 'duration',
+      question_text: 'Which of these songs is the shortest?',
+      options,
+      correct_index: selected.findIndex(t => t.id === shortest.id),
+      explanation: `"${shortest.name}" is ${formatDuration(shortest.durationMs || 0)} long`,
+      related_track_id: shortest.id,
     })
   }
 
