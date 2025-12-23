@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
+import { Progress } from '@/components/ui/progress'
+import { createClient } from '@/lib/supabase/client'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
-import type { Room, Participant, GameSettings } from '@/types/database'
+import type { Room, Participant } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 
@@ -19,7 +20,7 @@ interface LobbyViewProps {
   participants: Participant[]
   currentParticipant: Participant
   onStartGame: () => void
-  onUpdateSettings: (settings: GameSettings) => void
+  onPickSongs: () => void
   onUpdateRoomName: (name: string | null) => Promise<void> | void
   onRemoveParticipant?: (participantId: string) => Promise<void>
 }
@@ -29,15 +30,57 @@ export function LobbyView({
   participants,
   currentParticipant,
   onStartGame,
-  onUpdateSettings,
+  onPickSongs,
   onUpdateRoomName,
   onRemoveParticipant,
 }: LobbyViewProps) {
+  const router = useRouter()
+  const supabase = createClient()
   const isHost = currentParticipant.is_host
   const [copied, setCopied] = useState(false)
   const [roomNameInput, setRoomNameInput] = useState(room.name ?? '')
   const [isSavingName, setIsSavingName] = useState(false)
   const [removingParticipantId, setRemovingParticipantId] = useState<string | null>(null)
+  const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false)
+  const [playlistUrl, setPlaylistUrl] = useState<string | null>(null)
+  const [hasSpotify, setHasSpotify] = useState(false)
+  const [mySubmissions, setMySubmissions] = useState<Array<{
+    track_id: string
+    track_name: string
+    artist_name: string
+    album_art_url: string | null
+  }>>([])
+
+  // Check if user has Spotify connected
+  useEffect(() => {
+    const checkSpotify = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setHasSpotify(!!session?.provider_token)
+    }
+    checkSpotify()
+  }, [supabase.auth])
+
+  // Fetch user's submitted songs
+  useEffect(() => {
+    if (!currentParticipant.has_submitted) {
+      setMySubmissions([])
+      return
+    }
+
+    const fetchSubmissions = async () => {
+      const { data } = await supabase
+        .from('submissions')
+        .select('track_id, track_name, artist_name, album_art_url')
+        .eq('participant_id', currentParticipant.id)
+        .order('submission_order', { ascending: true })
+
+      if (data) {
+        setMySubmissions(data)
+      }
+    }
+
+    fetchSubmissions()
+  }, [currentParticipant.has_submitted, currentParticipant.id, supabase])
 
   const handleRemoveParticipant = async (participantId: string) => {
     if (!onRemoveParticipant) return
@@ -48,8 +91,11 @@ export function LobbyView({
       setRemovingParticipantId(null)
     }
   }
-  // Allow single player for testing (change to >= 2 for production)
-  const canStart = participants.length >= 1
+
+  const submittedCount = participants.filter(p => p.has_submitted).length
+  const hasSubmitted = currentParticipant.has_submitted
+  // Need at least 2 players who have submitted to start the quiz
+  const canStartQuiz = submittedCount >= 2
 
   const settings = room.settings || DEFAULT_GAME_SETTINGS
   const displayName = room.name?.trim() || room.room_code
@@ -68,13 +114,6 @@ Join: ${url}`
     navigator.clipboard.writeText(inviteText)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
-
-  const updateSetting = <K extends keyof GameSettings>(
-    key: K,
-    value: GameSettings[K]
-  ) => {
-    onUpdateSettings({ ...settings, [key]: value })
   }
 
   const handleNameBlur = async () => {
@@ -97,6 +136,30 @@ Join: ${url}`
       setRoomNameInput(limitedName)
     } finally {
       setIsSavingName(false)
+    }
+  }
+
+  const handleCreatePlaylist = async () => {
+    setIsCreatingPlaylist(true)
+    try {
+      const response = await fetch('/api/spotify/playlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: room.id,
+          playlistName: `Festive Frequencies - ${displayName}`,
+        }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        setPlaylistUrl(data.playlistUrl)
+      } else {
+        console.error('Playlist error:', data.error)
+      }
+    } catch (error) {
+      console.error('Playlist error:', error)
+    } finally {
+      setIsCreatingPlaylist(false)
     }
   }
 
@@ -167,7 +230,9 @@ Join: ${url}`
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between">
                   <span>Players</span>
-                  <Badge variant="secondary">{participants.length}</Badge>
+                  <Badge variant="secondary">
+                    {submittedCount}/{participants.length} ready
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -198,6 +263,12 @@ Join: ${url}`
                           Host
                         </Badge>
                       )}
+                      {/* Submission status */}
+                      {participant.has_submitted ? (
+                        <Badge variant="default" className="bg-green-600 text-xs">Ready</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">Not ready</Badge>
+                      )}
                       {/* Remove button for hosts (can't remove self or other hosts) */}
                       {isHost && !participant.is_host && participant.id !== currentParticipant.id && onRemoveParticipant && (
                         <Button
@@ -227,377 +298,248 @@ Join: ${url}`
               </CardContent>
             </Card>
 
-            {/* Start Game Button - visible on mobile, hidden on desktop (shown at bottom of right column) */}
+            {/* Pick Your Songs / My Songs Card */}
+            <Card className={`border-2 ${hasSubmitted ? 'border-green-500/30' : 'border-secondary/30'}`}>
+              {hasSubmitted ? (
+                <>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <span className="text-green-500">✓</span>
+                        My Songs
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onPickSongs}
+                      >
+                        Edit
+                      </Button>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {mySubmissions.map((track, index) => (
+                        <div
+                          key={track.track_id}
+                          className="flex items-center gap-2 p-1.5 rounded bg-muted/30"
+                        >
+                          <span className="text-xs text-muted-foreground w-4">{index + 1}.</span>
+                          {track.album_art_url && (
+                            <img
+                              src={track.album_art_url}
+                              alt=""
+                              className="w-8 h-8 rounded flex-shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{track.track_name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{track.artist_name}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </>
+              ) : (
+                <CardContent className="pt-4">
+                  <Button
+                    onClick={onPickSongs}
+                    className="w-full h-12 text-lg"
+                    variant="secondary"
+                  >
+                    🎵 Pick Your Songs
+                  </Button>
+                </CardContent>
+              )}
+            </Card>
+
+            {/* Start Quiz Button - visible on mobile, hidden on desktop (shown at bottom of right column) */}
             <div className="lg:hidden">
               {isHost ? (
-                <Button
-                  onClick={onStartGame}
-                  disabled={!canStart}
-                  className="w-full h-14 text-lg"
-                  size="lg"
-                >
-                  Start Game
-                </Button>
+                <div className="space-y-2">
+                  {!canStartQuiz && (
+                    <p className="text-center text-sm text-muted-foreground">
+                      Need at least 2 players with songs to start
+                    </p>
+                  )}
+                  <Button
+                    onClick={onStartGame}
+                    disabled={!canStartQuiz}
+                    className="w-full h-14 text-lg"
+                    size="lg"
+                  >
+                    Start Quiz →
+                  </Button>
+                </div>
               ) : (
                 <div className="text-center text-muted-foreground py-4">
-                  Waiting for host to start the game...
+                  {canStartQuiz
+                    ? 'Waiting for host to start the quiz...'
+                    : 'Pick your songs, then wait for host to start...'}
                 </div>
               )}
             </div>
           </div>
 
           {/* Right Column - Game Settings */}
-          <div className="space-y-4">
-
-        {/* Game Settings */}
-        <Card>
+          <div className="flex flex-col gap-4 lg:h-full">
+            {/* Game Settings - Read Only */}
+            <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Game Settings</CardTitle>
+            <CardTitle className="text-base flex items-center justify-between">
+              <span>Game Settings</span>
+              {isHost && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/room/${room.room_code}/settings`)}
+                >
+                  Edit
+                </Button>
+              )}
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {isHost ? (
-              <>
-                {/* Songs Required */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Songs per player</Label>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => {
-                          const newVal = Math.max(1, settings.songsRequired - 1)
-                          updateSetting('songsRequired', newVal)
-                          if (settings.christmasSongsRequired > newVal) {
-                            updateSetting('christmasSongsRequired', newVal)
-                          }
-                        }}
-                        disabled={settings.songsRequired <= 1}
-                      >
-                        −
-                      </Button>
-                      <span className="text-sm font-medium w-6 text-center">{settings.songsRequired}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => {
-                          updateSetting('songsRequired', Math.min(20, settings.songsRequired + 1))
-                        }}
-                        disabled={settings.songsRequired >= 20}
-                      >
-                        +
-                      </Button>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[settings.songsRequired]}
-                    onValueChange={([value]) => {
-                      updateSetting('songsRequired', value)
-                      // Ensure Christmas requirement doesn't exceed songs required
-                      if (settings.christmasSongsRequired > value) {
-                        updateSetting('christmasSongsRequired', value)
-                      }
-                    }}
-                    max={20}
-                    min={1}
-                    step={1}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Christmas Songs Required */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Required Christmas songs</Label>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => updateSetting('christmasSongsRequired', Math.max(0, (settings.christmasSongsRequired ?? 0) - 1))}
-                        disabled={(settings.christmasSongsRequired ?? 0) <= 0}
-                      >
-                        −
-                      </Button>
-                      <span className="text-sm font-medium w-8 text-center">
-                        {(settings.christmasSongsRequired ?? 0) === 0 ? 'Off' : settings.christmasSongsRequired}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => updateSetting('christmasSongsRequired', Math.min(settings.songsRequired, (settings.christmasSongsRequired ?? 0) + 1))}
-                        disabled={(settings.christmasSongsRequired ?? 0) >= settings.songsRequired}
-                      >
-                        +
-                      </Button>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[settings.christmasSongsRequired ?? 0]}
-                    onValueChange={([value]) => updateSetting('christmasSongsRequired', value)}
-                    max={settings.songsRequired}
-                    min={0}
-                    step={1}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Recent Songs Required */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">Songs from this year</Label>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => updateSetting('recentSongsRequired', Math.max(0, (settings.recentSongsRequired ?? 0) - 1))}
-                        disabled={(settings.recentSongsRequired ?? 0) <= 0}
-                      >
-                        −
-                      </Button>
-                      <span className="text-sm font-medium w-8 text-center">
-                        {(settings.recentSongsRequired ?? 0) === 0 ? 'Off' : settings.recentSongsRequired}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => updateSetting('recentSongsRequired', Math.min(settings.songsRequired, (settings.recentSongsRequired ?? 0) + 1))}
-                        disabled={(settings.recentSongsRequired ?? 0) >= settings.songsRequired}
-                      >
-                        +
-                      </Button>
-                    </div>
-                  </div>
-                  <Slider
-                    value={[settings.recentSongsRequired ?? 0]}
-                    onValueChange={([value]) => updateSetting('recentSongsRequired', value)}
-                    max={settings.songsRequired}
-                    min={0}
-                    step={1}
-                    className="w-full"
-                  />
-                </div>
-
-                {/* Preview Length */}
-                <div className="space-y-2">
-                  <Label className="text-sm">Preview length</Label>
-                  <div className="flex gap-2">
-                    {([15, 30] as const).map(num => (
-                      <Button
-                        key={num}
-                        variant={settings.previewLengthSeconds === num ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => updateSetting('previewLengthSeconds', num)}
-                        className="flex-1"
-                      >
-                        {num}s
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Guess Timer */}
-                <div className="space-y-2">
-                  <Label className="text-sm">Guess timer</Label>
-                  <div className="flex gap-2">
-                    {[
-                      { value: null, label: 'Off' },
-                      { value: 15, label: '15s' },
-                      { value: 30, label: '30s' },
-                    ].map(({ value, label }) => (
-                      <Button
-                        key={label}
-                        variant={settings.guessTimerSeconds === value ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => updateSetting('guessTimerSeconds', value)}
-                        className="flex-1"
-                      >
-                        {label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Toggle Options */}
-                <div className="space-y-4 pt-2">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm">Chameleon Mode</Label>
-                      <p className="text-xs text-muted-foreground">Pick one song disguised as someone else&apos;s taste - score if they guess wrong!</p>
-                    </div>
-                    <Switch
-                      checked={settings.chameleonMode}
-                      onCheckedChange={(checked) => updateSetting('chameleonMode', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm">Reveal after each round</Label>
-                      <p className="text-xs text-muted-foreground">Show who picked each song immediately after guessing</p>
-                    </div>
-                    <Switch
-                      checked={settings.revealAfterEachRound}
-                      onCheckedChange={(checked) => updateSetting('revealAfterEachRound', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm">Allow duplicate songs</Label>
-                      <p className="text-xs text-muted-foreground">Multiple players can pick the same song</p>
-                    </div>
-                    <Switch
-                      checked={settings.allowDuplicateSongs}
-                      onCheckedChange={(checked) => updateSetting('allowDuplicateSongs', checked)}
-                    />
-                  </div>
-
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm">Trivia round</Label>
-                      <p className="text-xs text-muted-foreground">Music trivia questions between song rounds</p>
-                    </div>
-                    <Switch
-                      checked={settings.triviaEnabled}
-                      onCheckedChange={(checked) => updateSetting('triviaEnabled', checked)}
-                    />
-                  </div>
-
-                  {settings.triviaEnabled && (
-                    <div className="space-y-2 pl-4 border-l-2 border-purple-500/30">
-                      <Label className="text-sm text-muted-foreground">Trivia questions</Label>
-                      <div className="flex gap-2">
-                        {([5, 10] as const).map(num => (
-                          <Button
-                            key={num}
-                            variant={settings.triviaQuestionCount === num ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => updateSetting('triviaQuestionCount', num)}
-                            className="flex-1"
-                          >
-                            {num}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Visual Settings */}
-                <div className="space-y-4 pt-4 border-t">
-                  <Label className="text-sm font-medium">Visual Settings</Label>
-
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm">Snow effect</Label>
-                      <p className="text-xs text-muted-foreground">Falling snow animation in background</p>
-                    </div>
-                    <Switch
-                      checked={settings.snowEffect ?? true}
-                      onCheckedChange={(checked) => updateSetting('snowEffect', checked)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-sm">Theme colour</Label>
-                    <div className="flex gap-2">
-                      {([
-                        { value: 'green', label: '🌲', bg: 'bg-green-600' },
-                        { value: 'red', label: '🎅', bg: 'bg-red-600' },
-                        { value: 'blue', label: '❄️', bg: 'bg-blue-600' },
-                        { value: 'purple', label: '🔮', bg: 'bg-purple-600' },
-                        { value: 'gold', label: '⭐', bg: 'bg-yellow-600' },
-                      ] as const).map(({ value, label, bg }) => (
-                        <Button
-                          key={value}
-                          variant={(settings.themeColor ?? 'green') === value ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => updateSetting('themeColor', value)}
-                          className={`flex-1 ${(settings.themeColor ?? 'green') === value ? bg : ''}`}
-                        >
-                          {label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              /* Read-only settings view for non-hosts */
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between py-1">
-                  <span className="text-muted-foreground">Songs per player</span>
-                  <span className="font-medium">{settings.songsRequired}</span>
-                </div>
+          <CardContent>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between py-1">
+                <span className="text-muted-foreground">Songs per player</span>
+                <span className="font-medium">{settings.songsRequired}</span>
+              </div>
+              {(settings.christmasSongsRequired ?? 0) > 0 && (
                 <div className="flex justify-between py-1">
                   <span className="text-muted-foreground">Christmas songs required</span>
                   <span className="font-medium">
-                    {settings.christmasSongsRequired === 0
-                      ? 'None'
-                      : settings.christmasSongsRequired === settings.songsRequired
-                        ? 'All'
-                        : settings.christmasSongsRequired}
+                    {settings.christmasSongsRequired === settings.songsRequired
+                      ? 'All'
+                      : settings.christmasSongsRequired}
                   </span>
                 </div>
+              )}
+              {(settings.recentSongsRequired ?? 0) > 0 && (
                 <div className="flex justify-between py-1">
-                  <span className="text-muted-foreground">Preview length</span>
-                  <span className="font-medium">{settings.previewLengthSeconds}s</span>
+                  <span className="text-muted-foreground">Songs from this year</span>
+                  <span className="font-medium">{settings.recentSongsRequired}</span>
                 </div>
+              )}
+              <div className="flex justify-between py-1">
+                <span className="text-muted-foreground">Preview length</span>
+                <span className="font-medium">{settings.previewLengthSeconds}s</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-muted-foreground">Guess timer</span>
+                <span className="font-medium">
+                  {settings.guessTimerSeconds ? `${settings.guessTimerSeconds}s` : 'Off'}
+                </span>
+              </div>
+              {settings.chameleonMode && (
                 <div className="flex justify-between py-1">
-                  <span className="text-muted-foreground">Guess timer</span>
-                  <span className="font-medium">
-                    {settings.guessTimerSeconds ? `${settings.guessTimerSeconds}s` : 'Off'}
-                  </span>
+                  <span className="text-muted-foreground">Chameleon Mode</span>
+                  <span className="font-medium text-secondary">On</span>
                 </div>
-                {settings.chameleonMode && (
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">Chameleon Mode</span>
-                    <span className="font-medium text-secondary">On</span>
-                  </div>
-                )}
-                {settings.revealAfterEachRound && (
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">Reveal after each round</span>
-                    <span className="font-medium text-secondary">On</span>
-                  </div>
-                )}
-                {settings.allowDuplicateSongs && (
-                  <div className="flex justify-between py-1">
-                    <span className="text-muted-foreground">Duplicate songs allowed</span>
-                    <span className="font-medium text-secondary">On</span>
-                  </div>
-                )}
+              )}
+              {settings.revealAfterEachRound && (
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">Reveal answers</span>
+                  <span className="font-medium text-secondary">On</span>
+                </div>
+              )}
+              {settings.allowDuplicateSongs && (
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">Duplicates allowed</span>
+                  <span className="font-medium text-secondary">On</span>
+                </div>
+              )}
+              {settings.triviaEnabled && (
                 <div className="flex justify-between py-1">
                   <span className="text-muted-foreground">Trivia round</span>
-                  <span className="font-medium">
-                    {settings.triviaEnabled ? `${settings.triviaQuestionCount} questions` : 'Off'}
-                  </span>
+                  <span className="font-medium">{settings.triviaQuestionCount} questions</span>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </Card>
 
-            {/* Start Game Button - hidden on mobile, visible on desktop */}
+            {/* Spotify Playlist Card */}
+            <Card className="border-[#1DB954]/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="text-[#1DB954]">♫</span>
+                  <span>Spotify Playlist</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {/* Progress indicator */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Songs collected</span>
+                    <span className="font-medium">
+                      {submittedCount * settings.songsRequired} / {participants.length * settings.songsRequired}
+                    </span>
+                  </div>
+                  <Progress
+                    value={(submittedCount / participants.length) * 100}
+                    className="h-2"
+                  />
+                </div>
+
+                {playlistUrl ? (
+                  <Button
+                    asChild
+                    className="w-full bg-[#1DB954] hover:bg-[#1ed760] text-white"
+                  >
+                    <a href={playlistUrl} target="_blank" rel="noopener noreferrer">
+                      Open in Spotify
+                    </a>
+                  </Button>
+                ) : submittedCount >= 2 ? (
+                  hasSpotify ? (
+                    <Button
+                      onClick={handleCreatePlaylist}
+                      disabled={isCreatingPlaylist}
+                      className="w-full bg-[#1DB954] hover:bg-[#1ed760] text-white"
+                    >
+                      {isCreatingPlaylist ? 'Creating...' : 'Create Playlist'}
+                    </Button>
+                  ) : (
+                    <p className="text-center text-xs text-muted-foreground">
+                      Connect Spotify to create playlists
+                    </p>
+                  )
+                ) : (
+                  <p className="text-center text-xs text-muted-foreground">
+                    Need at least 2 players with songs to create playlist
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Spacer to push Start Quiz to bottom on desktop */}
+            <div className="hidden lg:flex lg:flex-grow" />
+
+            {/* Start Quiz Button - hidden on mobile, visible on desktop */}
             <div className="hidden lg:block">
               {isHost ? (
-                <Button
-                  onClick={onStartGame}
-                  disabled={!canStart}
-                  className="w-full h-14 text-lg"
-                  size="lg"
-                >
-                  Start Game
-                </Button>
+                <div className="space-y-2">
+                  {!canStartQuiz && (
+                    <p className="text-center text-sm text-muted-foreground">
+                      Need at least 2 players with songs to start
+                    </p>
+                  )}
+                  <Button
+                    onClick={onStartGame}
+                    disabled={!canStartQuiz}
+                    className="w-full h-14 text-lg"
+                    size="lg"
+                  >
+                    Start Quiz →
+                  </Button>
+                </div>
               ) : (
                 <div className="text-center text-muted-foreground py-4">
-                  Waiting for host to start the game...
+                  {canStartQuiz
+                    ? 'Waiting for host to start the quiz...'
+                    : 'Pick your songs, then wait for host to start...'}
                 </div>
               )}
             </div>

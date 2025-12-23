@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
-import type { Room, Participant, GameSettings } from '@/types/database'
+import type { Room, Participant } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { LobbyView } from './components/lobby-view'
@@ -31,6 +31,7 @@ export default function RoomPage() {
   const [currentParticipant, setCurrentParticipant] = useState<Participant | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isPickingSongs, setIsPickingSongs] = useState(false)
 
   // Fetch room and participants
   const fetchRoomData = useCallback(async () => {
@@ -213,23 +214,6 @@ export default function RoomPage() {
     await updateRoomStatus('PLAYING_ROUND_1')
   }
 
-  // Update room settings (host only)
-  const updateRoomSettings = async (settings: GameSettings) => {
-    if (!room || !currentParticipant?.is_host) return
-
-    const { error } = await supabase
-      .from('rooms')
-      .update({ settings, updated_at: new Date().toISOString() })
-      .eq('id', room.id)
-
-    if (error) {
-      console.error('Error updating room settings:', error)
-    } else {
-      // Update local state
-      setRoom(prev => prev ? { ...prev, settings } : prev)
-    }
-  }
-
   const updateRoomName = async (name: string | null) => {
     if (!room || !currentParticipant?.is_host) return
 
@@ -300,6 +284,19 @@ export default function RoomPage() {
 
   // Render content based on room status
   const renderContent = () => {
+    // When user clicks "Pick Songs" in lobby, show submission view (local navigation)
+    if (room.status === 'LOBBY' && isPickingSongs) {
+      return (
+        <SubmissionView
+          room={room}
+          participants={participants}
+          currentParticipant={currentParticipant}
+          onAllSubmitted={startQuiz}
+          onNavigateToLobby={() => setIsPickingSongs(false)}
+        />
+      )
+    }
+
     switch (room.status) {
       case 'LOBBY':
         return (
@@ -307,20 +304,10 @@ export default function RoomPage() {
             room={room}
             participants={participants}
             currentParticipant={currentParticipant}
-            onStartGame={() => updateRoomStatus('SUBMITTING')}
-            onUpdateSettings={updateRoomSettings}
+            onStartGame={startQuiz}
+            onPickSongs={() => setIsPickingSongs(true)}
             onUpdateRoomName={updateRoomName}
             onRemoveParticipant={removeParticipant}
-          />
-        )
-      case 'SUBMITTING':
-        return (
-          <SubmissionView
-            room={room}
-            participants={participants}
-            currentParticipant={currentParticipant}
-            onAllSubmitted={startQuiz}
-            onNavigateToLobby={() => updateRoomStatus('LOBBY')}
           />
         )
       case 'PLAYING_ROUND_1':

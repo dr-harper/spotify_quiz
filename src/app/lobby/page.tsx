@@ -13,9 +13,8 @@ import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
-import type { GameSettings, Room } from '@/types/database'
+import type { Room } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
-import { GameSettingsModal } from '@/app/room/[code]/components/game-settings-modal'
 
 interface RoomHistory {
   room: Room
@@ -47,8 +46,6 @@ export default function LobbyPage() {
   const [isJoining, setIsJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [roomHistory, setRoomHistory] = useState<RoomHistory[]>([])
-  const [settingsDraft, setSettingsDraft] = useState<GameSettings>(DEFAULT_GAME_SETTINGS)
-  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const router = useRouter()
   const supabase = createClient()
   const { setTrack } = useBackgroundMusic()
@@ -123,7 +120,7 @@ export default function LobbyPage() {
     getUser()
   }, [supabase.auth])
 
-  const handleCreateRoom = async (settings: GameSettings) => {
+  const handleCreateRoom = async () => {
     if (!user) return
     setIsCreating(true)
     setError(null)
@@ -133,15 +130,15 @@ export default function LobbyPage() {
       const spotifyId = user.user_metadata?.provider_id || user.id
       const normalizedName = lobbyName.trim().replace(/\s+/g, ' ')
 
-      // Create the room
+      // Create the room with default settings
       const { data: room, error: roomError } = await supabase
         .from('rooms')
         .insert({
           room_code: roomCode,
           host_id: user.id,
           name: normalizedName ? normalizedName : null,
-          status: 'SUBMITTING',
-          settings,
+          status: 'LOBBY',
+          settings: DEFAULT_GAME_SETTINGS,
         })
         .select()
         .single()
@@ -162,23 +159,13 @@ export default function LobbyPage() {
 
       if (participantError) throw participantError
 
-      router.push(`/room/${roomCode}`)
+      // Redirect to settings page to configure the game
+      router.push(`/room/${roomCode}/settings`)
     } catch (err) {
       console.error('Error creating room:', err)
       setError('Failed to create room. Please try again.')
       setIsCreating(false)
     }
-  }
-
-  const openSettingsModal = () => {
-    if (!user) return
-    setSettingsModalOpen(true)
-  }
-
-  const handleSettingsSave = async (settings: GameSettings) => {
-    setSettingsDraft(settings)
-    setSettingsModalOpen(false)
-    await handleCreateRoom(settings)
   }
 
   const handleJoinRoom = async () => {
@@ -281,11 +268,11 @@ export default function LobbyPage() {
                 </p>
               </div>
               <Button
-                onClick={openSettingsModal}
+                onClick={handleCreateRoom}
                 disabled={isCreating}
                 className="w-full h-12 text-lg"
               >
-                {isCreating ? 'Creating...' : 'Create & Choose Settings'}
+                {isCreating ? 'Creating...' : 'Create Room'}
               </Button>
             </CardContent>
           </Card>
@@ -380,13 +367,6 @@ export default function LobbyPage() {
           </Card>
         )}
 
-        <GameSettingsModal
-          open={settingsModalOpen}
-          onOpenChange={(open) => setSettingsModalOpen(open)}
-          settings={settingsDraft}
-          onSave={handleSettingsSave}
-          isSaving={isCreating}
-        />
       </div>
     </main>
   )

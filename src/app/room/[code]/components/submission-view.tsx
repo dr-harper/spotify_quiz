@@ -533,6 +533,9 @@ Join: ${url}`
 
       clearDraft()
       setHasSubmitted(true)
+
+      // Navigate back to lobby after successful submission
+      onNavigateToLobby()
     } catch (error: unknown) {
       const err = error as { message?: string; details?: string; hint?: string }
       console.error('Submission error:', err.message || error, err.details, err.hint)
@@ -855,6 +858,15 @@ Join: ${url}`
                     </p>
                   </div>
                 )}
+
+                {/* Back to Lobby Button */}
+                <Button
+                  variant="outline"
+                  onClick={onNavigateToLobby}
+                  className="w-full"
+                >
+                  ← Back to Lobby
+                </Button>
               </div>
             </div>
           </div>
