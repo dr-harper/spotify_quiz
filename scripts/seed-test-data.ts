@@ -11,6 +11,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import type { SubmissionInsert } from '@/types/database'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -23,16 +24,6 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 const TEST_ROOM_CODE = 'TEST01'
-
-type SubmissionInsert = {
-  participant_id: string
-  track_id: string
-  track_name: string
-  artist_name: string
-  album_art_url: string | null
-  preview_url: string
-  submission_order: number
-}
 
 type VoteInsert = {
   round_id: string

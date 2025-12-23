@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import type { SubmissionInsert } from '@/types/database'
 
 const TEST_ROOM_CODE = 'TEST01'
 
@@ -116,15 +117,7 @@ export async function POST() {
     const isMultiPlayer = allParticipants.length > 1
 
     // Create submissions (10 songs per participant)
-    const allSubmissions: {
-      participant_id: string
-      track_id: string
-      track_name: string
-      artist_name: string
-      album_art_url: string
-      preview_url: string
-      submission_order: number
-    }[] = []
+    const allSubmissions: SubmissionInsert[] = []
     for (const participant of allParticipants) {
       const shuffledSongs = [...SAMPLE_SONGS].sort(() => Math.random() - 0.5)
       for (let i = 0; i < 10; i++) {

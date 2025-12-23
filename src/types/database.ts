@@ -83,6 +83,16 @@ export interface Submission {
   is_chameleon: boolean
 }
 
+export type SubmissionInsert = {
+  participant_id: string
+  track_id: string
+  track_name: string
+  artist_name: string
+  album_art_url: string | null
+  preview_url: string
+  submission_order: number
+}
+
 export interface QuizRound {
   id: string
   room_id: string
