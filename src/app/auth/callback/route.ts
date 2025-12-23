@@ -49,8 +49,30 @@ export async function GET(request: Request) {
         const displayName = userMeta?.full_name || userMeta?.name || user.email?.split('@')[0] || 'Guest'
         const avatarUrl = userMeta?.avatar_url || userMeta?.picture || null
         const spotifyId = userMeta?.provider_id || userMeta?.sub || user.id
+        const isGuestUser = userMeta?.is_guest === true || user.is_anonymous
 
-        // Add user as participant
+        // For guest users, check if there's an existing participant with same name
+        if (isGuestUser) {
+          const { data: existingGuestParticipant } = await supabase
+            .from('participants')
+            .select('id, user_id, is_host')
+            .eq('room_id', room.id)
+            .eq('display_name', displayName)
+            .eq('is_host', false)  // Don't check host accounts
+            .single()
+
+          if (existingGuestParticipant) {
+            // Redirect to duplicate name page to let user choose
+            const params = new URLSearchParams({
+              room: upperRoomCode,
+              name: displayName,
+              pid: existingGuestParticipant.id,
+            })
+            return redirectTo(request, origin, `/auth/duplicate-name?${params.toString()}`)
+          }
+        }
+
+        // Add user as new participant
         await supabase.from('participants').insert({
           room_id: room.id,
           user_id: user.id,

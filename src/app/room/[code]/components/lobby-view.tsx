@@ -21,6 +21,7 @@ interface LobbyViewProps {
   onStartGame: () => void
   onUpdateSettings: (settings: GameSettings) => void
   onUpdateRoomName: (name: string | null) => Promise<void> | void
+  onRemoveParticipant?: (participantId: string) => Promise<void>
 }
 
 export function LobbyView({
@@ -30,11 +31,23 @@ export function LobbyView({
   onStartGame,
   onUpdateSettings,
   onUpdateRoomName,
+  onRemoveParticipant,
 }: LobbyViewProps) {
   const isHost = currentParticipant.is_host
   const [copied, setCopied] = useState(false)
   const [roomNameInput, setRoomNameInput] = useState(room.name ?? '')
   const [isSavingName, setIsSavingName] = useState(false)
+  const [removingParticipantId, setRemovingParticipantId] = useState<string | null>(null)
+
+  const handleRemoveParticipant = async (participantId: string) => {
+    if (!onRemoveParticipant) return
+    setRemovingParticipantId(participantId)
+    try {
+      await onRemoveParticipant(participantId)
+    } finally {
+      setRemovingParticipantId(null)
+    }
+  }
   // Allow single player for testing (change to >= 2 for production)
   const canStart = participants.length >= 1
 
@@ -184,6 +197,23 @@ Join: ${url}`
                         <Badge variant="outline" className="text-primary border-primary text-xs">
                           Host
                         </Badge>
+                      )}
+                      {/* Remove button for hosts (can't remove self or other hosts) */}
+                      {isHost && !participant.is_host && participant.id !== currentParticipant.id && onRemoveParticipant && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemoveParticipant(participant.id)}
+                          disabled={removingParticipantId === participant.id}
+                          title="Remove player"
+                        >
+                          {removingParticipantId === participant.id ? (
+                            <span className="animate-spin">⏳</span>
+                          ) : (
+                            <span>✕</span>
+                          )}
+                        </Button>
                       )}
                     </div>
                   ))}

@@ -248,6 +248,30 @@ export default function RoomPage() {
     }
   }
 
+  // Remove a participant (host only)
+  const removeParticipant = async (participantId: string) => {
+    if (!room || !currentParticipant?.is_host) return
+
+    // Delete their submissions first (foreign key constraint)
+    await supabase
+      .from('submissions')
+      .delete()
+      .eq('participant_id', participantId)
+
+    // Delete the participant
+    const { error } = await supabase
+      .from('participants')
+      .delete()
+      .eq('id', participantId)
+
+    if (error) {
+      console.error('Error removing participant:', error)
+    } else {
+      // Update local state
+      setParticipants(prev => prev.filter(p => p.id !== participantId))
+    }
+  }
+
   if (isLoading) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-4">
@@ -286,6 +310,7 @@ export default function RoomPage() {
             onStartGame={() => updateRoomStatus('SUBMITTING')}
             onUpdateSettings={updateRoomSettings}
             onUpdateRoomName={updateRoomName}
+            onRemoveParticipant={removeParticipant}
           />
         )
       case 'SUBMITTING':
