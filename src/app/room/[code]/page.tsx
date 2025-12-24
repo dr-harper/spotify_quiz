@@ -122,6 +122,7 @@ export default function RoomPage() {
         },
         async () => {
           // Refetch all participants on any change
+          const { data: { user } } = await supabase.auth.getUser()
           const { data } = await supabase
             .from('participants')
             .select('*')
@@ -133,6 +134,11 @@ export default function RoomPage() {
               (p, index, self) => index === self.findIndex(t => t.user_id === p.user_id)
             )
             setParticipants(uniqueParticipants as Participant[])
+            // Also update currentParticipant to reflect changes (e.g., has_submitted)
+            const current = uniqueParticipants.find(p => p.user_id === user?.id)
+            if (current) {
+              setCurrentParticipant(current as Participant)
+            }
           }
         }
       )
