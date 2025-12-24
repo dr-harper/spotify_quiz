@@ -149,11 +149,11 @@ FUN_FACT_3: [A third observation, maybe playfully teasing or noting something un
     const text = response.text().trim()
 
     // Parse the response
-    const descMatch = text.match(/DESCRIPTION:\s*(.+?)(?:\n|VIBE:|$)/s)
-    const vibeMatch = text.match(/VIBE:\s*(.+?)(?:\n|FUN_FACT|$)/s)
-    const fact1Match = text.match(/FUN_FACT_1:\s*(.+?)(?:\n|FUN_FACT_2|$)/s)
-    const fact2Match = text.match(/FUN_FACT_2:\s*(.+?)(?:\n|FUN_FACT_3|$)/s)
-    const fact3Match = text.match(/FUN_FACT_3:\s*(.+?)$/s)
+    const descMatch = text.match(/DESCRIPTION:\s*([\s\S]+?)(?:\n|VIBE:|$)/)
+    const vibeMatch = text.match(/VIBE:\s*([\s\S]+?)(?:\n|FUN_FACT|$)/)
+    const fact1Match = text.match(/FUN_FACT_1:\s*([\s\S]+?)(?:\n|FUN_FACT_2|$)/)
+    const fact2Match = text.match(/FUN_FACT_2:\s*([\s\S]+?)(?:\n|FUN_FACT_3|$)/)
+    const fact3Match = text.match(/FUN_FACT_3:\s*([\s\S]+?)$/)
 
     const description = descMatch ? descMatch[1].trim() : `A great mix of ${totalSongs} songs from ${playerCount} players!`
     const vibe = vibeMatch ? vibeMatch[1].trim().replace(/['"]/g, '') : 'Party Mix'
