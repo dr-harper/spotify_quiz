@@ -60,14 +60,38 @@ export function LobbyView({
   const backgroundWasPlayingRef = useRef(false)
   const { isPlaying: isBackgroundPlaying, stop: stopBackgroundMusic, play: resumeBackgroundMusic } = useBackgroundMusic()
 
-  // Check if user has Spotify connected
+  // Check if user has Spotify connected (and try to refresh if expired)
   useEffect(() => {
     const checkSpotify = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      setHasSpotify(!!session?.provider_token)
+
+      if (session?.provider_token) {
+        setHasSpotify(true)
+        return
+      }
+
+      // Token might be expired - try refreshing the session
+      const { data: refreshData } = await supabase.auth.refreshSession()
+      if (refreshData?.session?.provider_token) {
+        setHasSpotify(true)
+        return
+      }
+
+      setHasSpotify(false)
     }
     checkSpotify()
   }, [supabase.auth])
+
+  const handleReconnectSpotify = async () => {
+    const redirectUrl = `${window.location.origin}/auth/callback?room=${room.room_code}`
+    await supabase.auth.signInWithOAuth({
+      provider: 'spotify',
+      options: {
+        redirectTo: redirectUrl,
+        scopes: 'playlist-modify-public playlist-modify-private',
+      },
+    })
+  }
 
   // Fetch user's submitted songs
   useEffect(() => {
@@ -624,9 +648,19 @@ Join: ${url}`
                       {isCreatingPlaylist ? 'Creating...' : 'Create Playlist'}
                     </Button>
                   ) : (
-                    <p className="text-center text-xs text-muted-foreground">
-                      Connect Spotify to create playlists
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-center text-xs text-muted-foreground">
+                        Spotify connection expired
+                      </p>
+                      <Button
+                        onClick={handleReconnectSpotify}
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-[#1DB954] border-[#1DB954] hover:bg-[#1DB954]/10"
+                      >
+                        Reconnect Spotify
+                      </Button>
+                    </div>
                   )
                 ) : (
                   <p className="text-center text-xs text-muted-foreground">
