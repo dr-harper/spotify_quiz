@@ -1,6 +1,116 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { orderSongsWithGemini } from '@/lib/gemini'
+import { orderSongsWithGemini, shuffleArray, spreadByParticipant } from '@/lib/gemini'
+
+interface SubmissionWithEnergy {
+  track_id: string
+  track_name: string
+  artist_name: string
+  participant_id?: string
+  popularity?: number
+  duration_ms?: number
+  release_date?: string
+  energy_hint?: number
+}
+
+function parseYear(releaseDate?: string): number | null {
+  if (!releaseDate) return null
+  const [year] = releaseDate.split('-')
+  const parsed = Number(year)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function normalize(value: number, min: number, max: number) {
+  if (!Number.isFinite(value) || max === min) return 0.5
+  return clamp((value - min) / (max - min), 0, 1)
+}
+
+function computeEnergyHints(tracks: SubmissionWithEnergy[]): SubmissionWithEnergy[] {
+  const durations = tracks
+    .map(t => t.duration_ms)
+    .filter((d): d is number => typeof d === 'number' && Number.isFinite(d))
+
+  const years = tracks
+    .map(t => parseYear(t.release_date))
+    .filter((y): y is number => y !== null)
+
+  const minDuration = durations.length ? Math.min(...durations) : 0
+  const maxDuration = durations.length ? Math.max(...durations) : 1
+  const minYear = years.length ? Math.min(...years) : new Date().getFullYear() - 20
+  const maxYear = years.length ? Math.max(...years) : new Date().getFullYear()
+
+  const popularityWeight = 0.5
+  const durationWeight = 0.2
+  const recencyWeight = 0.3
+
+  return tracks.map(track => {
+    const popularityScore = normalize(track.popularity ?? 50, 0, 100)
+    const durationScore = 1 - normalize(track.duration_ms ?? minDuration, minDuration, maxDuration)
+    const yearScore = normalize(parseYear(track.release_date) ?? minYear, minYear, maxYear)
+
+    const energy =
+      popularityScore * popularityWeight +
+      durationScore * durationWeight +
+      yearScore * recencyWeight
+
+    return { ...track, energy_hint: clamp(energy, 0, 1) }
+  })
+}
+
+function createEnergyCurve(tracks: SubmissionWithEnergy[]): SubmissionWithEnergy[] {
+  if (tracks.length <= 3) return tracks
+
+  const sorted = [...tracks].sort((a, b) => (a.energy_hint ?? 0) - (b.energy_hint ?? 0))
+
+  const lowCount = Math.max(1, Math.round(sorted.length * 0.25))
+  const midCount = Math.max(1, Math.round(sorted.length * 0.25))
+  const peakCount = Math.max(1, Math.round(sorted.length * 0.2))
+  const adjustedPeakCount = Math.min(peakCount, sorted.length - (lowCount + midCount))
+
+  const lowSegment = sorted.splice(0, lowCount)
+  const midSegment = sorted.splice(0, midCount)
+  const peakSegment = sorted.splice(-adjustedPeakCount)
+  const cooldownSegment = sorted.sort((a, b) => (b.energy_hint ?? 0) - (a.energy_hint ?? 0))
+
+  return [...lowSegment, ...midSegment, ...peakSegment, ...cooldownSegment]
+}
+
+async function fetchTrackMetadata(trackIds: string[], spotifyToken: string) {
+  const metadataMap = new Map<string, { popularity?: number; duration_ms?: number; release_date?: string }>()
+
+  for (let i = 0; i < trackIds.length; i += 50) {
+    const batch = trackIds.slice(i, i + 50)
+    try {
+      const response = await fetch(`https://api.spotify.com/v1/tracks?ids=${batch.join(',')}`, {
+        headers: { Authorization: `Bearer ${spotifyToken}` },
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Failed to fetch track metadata from Spotify:', response.status, errorText)
+        continue
+      }
+
+      const { tracks } = await response.json()
+      for (const track of tracks) {
+        if (!track?.id) continue
+        metadataMap.set(track.id, {
+          popularity: track.popularity,
+          duration_ms: track.duration_ms,
+          release_date: track.album?.release_date,
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching track metadata batch:', error)
+    }
+  }
+
+  return metadataMap
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,9 +174,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No submissions found' }, { status: 404 })
     }
 
-    // Use Gemini AI to order songs for optimal energy progression
-    // Also ensures player variety (no consecutive songs from same person)
-    const orderedSubmissions = await orderSongsWithGemini(submissions)
+    let orderedSubmissions: SubmissionWithEnergy[] = []
+    let metadataFailed = false
+
+    try {
+      const metadata = await fetchTrackMetadata(submissions.map(s => s.track_id), spotifyToken)
+
+      if (metadata.size === 0) {
+        metadataFailed = true
+        console.warn('No metadata returned for submitted tracks, using participant-balanced shuffle')
+      } else {
+        const withMetadata: SubmissionWithEnergy[] = submissions.map(submission => ({
+          ...submission,
+          ...metadata.get(submission.track_id),
+        }))
+
+        const withEnergy = computeEnergyHints(withMetadata)
+        const energyCurve = createEnergyCurve(withEnergy)
+        const seededOrder = spreadByParticipant(energyCurve)
+
+        // Use Gemini AI to order songs for optimal energy progression
+        // Also ensures player variety (no consecutive songs from same person)
+        orderedSubmissions = await orderSongsWithGemini(seededOrder)
+      }
+    } catch (error) {
+      metadataFailed = true
+      console.error('Failed to fetch metadata for playlist ordering:', error)
+    }
+
+    if (metadataFailed && orderedSubmissions.length === 0) {
+      const seededShuffle = spreadByParticipant(shuffleArray(submissions))
+      orderedSubmissions = await orderSongsWithGemini(seededShuffle)
+    }
 
     // Create playlist
     const createResponse = await fetch(

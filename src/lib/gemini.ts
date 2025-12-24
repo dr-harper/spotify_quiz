@@ -18,7 +18,7 @@ interface GeminiResponse {
 /**
  * Fisher-Yates shuffle algorithm
  */
-function shuffleArray<T>(array: T[]): T[] {
+export function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
@@ -31,7 +31,7 @@ function shuffleArray<T>(array: T[]): T[] {
  * Reorders songs to minimise consecutive tracks from the same participant.
  * Uses a greedy algorithm: pick from participants who haven't had a recent song.
  */
-function spreadByParticipant(songs: Song[]): Song[] {
+export function spreadByParticipant(songs: Song[]): Song[] {
   if (songs.length <= 2 || !songs[0]?.participant_id) {
     return songs
   }
