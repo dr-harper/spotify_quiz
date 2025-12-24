@@ -648,6 +648,35 @@ Join: ${url}`
                         {playlistSummary.vibe}
                       </Badge>
                     )}
+                    {isHost && playlistSummary && !isGeneratingSummary && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 ml-1"
+                        onClick={async () => {
+                          setIsGeneratingSummary(true)
+                          setPlaylistSummary(null)
+                          try {
+                            const response = await fetch('/api/summarise-playlist', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ roomId: room.id }),
+                            })
+                            const data = await response.json()
+                            if (data.summary) {
+                              setPlaylistSummary(data.summary)
+                            }
+                          } catch (error) {
+                            console.error('Failed to regenerate summary:', error)
+                          } finally {
+                            setIsGeneratingSummary(false)
+                          }
+                        }}
+                        title="Regenerate summary"
+                      >
+                        🔄
+                      </Button>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">

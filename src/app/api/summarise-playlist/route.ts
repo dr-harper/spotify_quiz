@@ -123,26 +123,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ summary, fallback: true })
     }
 
-    // Build the prompt
-    const playlistOverview = Object.entries(songsByPlayer)
-      .map(([player, songs]) => `${player}:\n${songs.map(s => `  - ${s}`).join('\n')}`)
-      .join('\n\n')
+    // Build the prompt - anonymous list of songs (no player names!)
+    const allSongsList = allSongs.map((s, i) => `${i + 1}. ${s}`).join('\n')
 
-    const prompt = `You're a witty music commentator for a party quiz game. Analyse this group's playlist and create a fun summary.
+    const prompt = `You're a witty music commentator for a party quiz game where players guess who picked each song. Analyse this playlist and create a fun summary.
+
+IMPORTANT: Keep it ANONYMOUS - do NOT mention or hint at who picked which songs. The summary should describe the overall playlist, not individual picks.
 
 PLAYLIST (${totalSongs} songs from ${playerCount} players):
-${playlistOverview}
+${allSongsList}
 
 Stats:
 - Most picked artist: ${topArtist ? `${topArtist[0]} (${topArtist[1]} picks)` : 'Various'}
 - Most popular decade: ${topDecade ? `${topDecade[0]} (${topDecade[1]} songs)` : 'Mixed'}
 
 Respond with EXACTLY this format (no markdown, no extra formatting):
-DESCRIPTION: [2-3 sentences capturing the overall vibe and any interesting patterns. Be playful and fun! Under 60 words.]
+DESCRIPTION: [2-3 sentences capturing the overall vibe and patterns of the WHOLE playlist. Be playful and fun! Do NOT mention specific players. Under 60 words.]
 VIBE: [A catchy 2-4 word vibe tag like "Nostalgic Christmas Party", "Indie Meets Pop", "Dance Floor Royalty", "Throwback Central", etc.]
-FUN_FACT_1: [A fun observation about the playlist - could be about genres, decades, or patterns. One sentence.]
-FUN_FACT_2: [Another fun observation, different angle. One sentence.]
-FUN_FACT_3: [A third observation, maybe playfully teasing or noting something unusual. One sentence.]`
+FUN_FACT_1: [A fun observation about the playlist as a whole - genres, decades, patterns. Do NOT reveal who picked what. One sentence.]
+FUN_FACT_2: [Another fun observation, different angle. Keep it anonymous. One sentence.]
+FUN_FACT_3: [A third observation, maybe playfully teasing the group's collective taste. One sentence.]`
 
     const result = await model.generateContent(prompt)
     const response = result.response
