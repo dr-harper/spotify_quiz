@@ -615,6 +615,9 @@ Join: ${url}`
 
     return (
       <main className="flex min-h-screen flex-col items-center p-4 pt-8">
+        {/* Hidden audio element for previews */}
+        <audio ref={audioRef} />
+
         <div className="w-full max-w-4xl">
           <div className="max-w-md mx-auto lg:max-w-none">
             <GameBreadcrumbs
@@ -671,13 +674,33 @@ Join: ${url}`
                           }`}
                         >
                           <span className="text-sm text-muted-foreground w-5">{index + 1}.</span>
-                          {track.albumArt && (
-                            <img
-                              src={track.albumArt}
-                              alt=""
-                              className="w-10 h-10 rounded flex-shrink-0"
-                            />
-                          )}
+                          <div className="relative flex-shrink-0">
+                            {track.albumArt ? (
+                              <img
+                                src={track.albumArt}
+                                alt=""
+                                className={`w-10 h-10 rounded ${
+                                  track.previewUrl ? 'ring-1 ring-border/40' : ''
+                                }`}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                                <span className="text-muted-foreground text-xs">No art</span>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => togglePlay(track)}
+                              disabled={!track.previewUrl}
+                              className="absolute inset-0 flex items-center justify-center bg-black/40 rounded opacity-0 hover:opacity-100 transition-opacity disabled:opacity-50"
+                              aria-label={playingTrackId === track.id ? 'Pause preview' : 'Play preview'}
+                            >
+                              {playingTrackId === track.id ? (
+                                <span className="text-white text-lg">&#9208;</span>
+                              ) : (
+                                <span className="text-white text-lg">&#9654;</span>
+                              )}
+                            </button>
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">{track.name}</p>
                             <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
@@ -1184,13 +1207,31 @@ Join: ${url}`
                         >
                           <span className="text-sm text-muted-foreground w-5">{index + 1}.</span>
                           <div className="relative flex-shrink-0">
-                            {track.albumArt && (
+                            {track.albumArt ? (
                               <img
                                 src={track.albumArt}
                                 alt=""
-                                className="w-8 h-8 rounded"
+                                className={`w-10 h-10 rounded ${
+                                  track.hasPreview ? 'ring-1 ring-border/40' : ''
+                                }`}
                               />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                                <span className="text-muted-foreground text-[10px]">No art</span>
+                              </div>
                             )}
+                            <button
+                              onClick={() => togglePlay(track)}
+                              disabled={!track.hasPreview}
+                              className="absolute inset-0 flex items-center justify-center bg-black/40 rounded opacity-0 hover:opacity-100 transition-opacity disabled:opacity-50"
+                              aria-label={playingTrackId === track.id ? 'Pause preview' : 'Play preview'}
+                            >
+                              {playingTrackId === track.id ? (
+                                <span className="text-white text-lg">&#9208;</span>
+                              ) : (
+                                <span className="text-white text-lg">&#9654;</span>
+                              )}
+                            </button>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">{track.name}</p>
