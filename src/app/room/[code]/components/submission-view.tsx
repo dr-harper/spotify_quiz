@@ -595,13 +595,32 @@ Join: ${url}`
     setIsEditing(true)
     try {
       // Delete existing submissions
-      await supabase
+      const { error: deleteError } = await supabase
         .from('submissions')
         .delete()
         .eq('participant_id', currentParticipant.id)
 
+      if (deleteError) {
+        console.error('Failed to delete submissions:', deleteError)
+        alert('Failed to edit picks. Please try again.')
+        return
+      }
+
+      // Verify deletion worked
+      const { data: remainingSubmissions } = await supabase
+        .from('submissions')
+        .select('id')
+        .eq('participant_id', currentParticipant.id)
+        .limit(1)
+
+      if (remainingSubmissions && remainingSubmissions.length > 0) {
+        console.error('Submissions still exist after delete')
+        alert('Failed to clear old picks. Please try again.')
+        return
+      }
+
       // Mark participant as not submitted and clear AI summary
-      await supabase
+      const { error: updateError } = await supabase
         .from('participants')
         .update({
           has_submitted: false,
@@ -609,6 +628,12 @@ Join: ${url}`
           mood_tag: null,
         })
         .eq('id', currentParticipant.id)
+
+      if (updateError) {
+        console.error('Failed to update participant:', updateError)
+        alert('Failed to reset submission status. Please try again.')
+        return
+      }
 
       // Reset local state - keep the tracks so they can modify
       if (submittedFromDb.length > 0) {
@@ -621,6 +646,7 @@ Join: ${url}`
       setMoodTag(null)
     } catch (error) {
       console.error('Error editing submission:', error)
+      alert('An error occurred. Please try again.')
     } finally {
       setIsEditing(false)
     }
