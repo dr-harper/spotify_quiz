@@ -11,6 +11,7 @@ import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
 import { createClient } from '@/lib/supabase/client'
 import type { Room, Participant, Track } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
+import { useBackgroundMusic } from '@/components/background-music'
 
 interface SubmissionViewProps {
   room: Room
@@ -63,8 +64,10 @@ export function SubmissionView({
   const [copied, setCopied] = useState(false)
   const [showPlayers, setShowPlayers] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const backgroundWasPlayingRef = useRef(false)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = createClient()
+  const { isPlaying: isBackgroundPlaying, stop: stopBackgroundMusic, play: resumeBackgroundMusic } = useBackgroundMusic()
 
   const displayName = room.name?.trim() || room.room_code
 
@@ -228,9 +231,17 @@ Join: ${url}`
       // Stop playing
       audioRef.current?.pause()
       setPlayingTrackId(null)
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
     } else {
       // Play new track
       if (audioRef.current) {
+        if (isBackgroundPlaying) {
+          backgroundWasPlayingRef.current = true
+          stopBackgroundMusic()
+        }
         audioRef.current.src = track.previewUrl
         audioRef.current.play()
         setPlayingTrackId(track.id)
@@ -243,10 +254,25 @@ Join: ${url}`
     const audio = audioRef.current
     if (!audio) return
 
-    const handleEnded = () => setPlayingTrackId(null)
+    const handleEnded = () => {
+      setPlayingTrackId(null)
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
+    }
     audio.addEventListener('ended', handleEnded)
     return () => audio.removeEventListener('ended', handleEnded)
-  }, [])
+  }, [resumeBackgroundMusic])
+
+  useEffect(() => {
+    return () => {
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
+    }
+  }, [resumeBackgroundMusic])
 
   const isHost = currentParticipant.is_host
   const allSubmitted = participants.every(p => p.has_submitted)

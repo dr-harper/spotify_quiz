@@ -14,6 +14,7 @@ import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
 import type { Room, Participant } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
+import { useBackgroundMusic } from '@/components/background-music'
 
 interface LobbyViewProps {
   room: Room
@@ -53,6 +54,8 @@ export function LobbyView({
   }>>([])
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const backgroundWasPlayingRef = useRef(false)
+  const { isPlaying: isBackgroundPlaying, stop: stopBackgroundMusic, play: resumeBackgroundMusic } = useBackgroundMusic()
 
   // Check if user has Spotify connected
   useEffect(() => {
@@ -109,8 +112,16 @@ export function LobbyView({
     if (playingTrackId === track.track_id) {
       audioRef.current?.pause()
       setPlayingTrackId(null)
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
     } else {
       if (audioRef.current) {
+        if (isBackgroundPlaying) {
+          backgroundWasPlayingRef.current = true
+          stopBackgroundMusic()
+        }
         audioRef.current.src = track.preview_url
         audioRef.current.play()
         setPlayingTrackId(track.track_id)
@@ -122,10 +133,25 @@ export function LobbyView({
     const audio = audioRef.current
     if (!audio) return
 
-    const handleEnded = () => setPlayingTrackId(null)
+    const handleEnded = () => {
+      setPlayingTrackId(null)
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
+    }
     audio.addEventListener('ended', handleEnded)
     return () => audio.removeEventListener('ended', handleEnded)
-  }, [])
+  }, [resumeBackgroundMusic])
+
+  useEffect(() => {
+    return () => {
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
+    }
+  }, [resumeBackgroundMusic])
 
   useEffect(() => {
     setRoomNameInput(room.name ?? '')
