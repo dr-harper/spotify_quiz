@@ -29,6 +29,7 @@ export const DEMO_ROOM: Room = {
   status: 'LOBBY',
   current_round: 0,
   settings: DEMO_GAME_SETTINGS,
+  playlist_summary: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 }
