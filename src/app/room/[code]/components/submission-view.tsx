@@ -11,6 +11,8 @@ import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
 import { createClient } from '@/lib/supabase/client'
 import type { Room, Participant, Track } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
+import { useBackgroundMusic } from '@/components/background-music'
+import { Play, Pause } from 'lucide-react'
 
 interface SubmissionViewProps {
   room: Room
@@ -63,8 +65,10 @@ export function SubmissionView({
   const [copied, setCopied] = useState(false)
   const [showPlayers, setShowPlayers] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const backgroundWasPlayingRef = useRef(false)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = createClient()
+  const { isPlaying: isBackgroundPlaying, stop: stopBackgroundMusic, play: resumeBackgroundMusic } = useBackgroundMusic()
 
   const displayName = room.name?.trim() || room.room_code
 
@@ -228,12 +232,24 @@ Join: ${url}`
       // Stop playing
       audioRef.current?.pause()
       setPlayingTrackId(null)
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
     } else {
       // Play new track
       if (audioRef.current) {
+        if (isBackgroundPlaying) {
+          backgroundWasPlayingRef.current = true
+          stopBackgroundMusic()
+        }
         audioRef.current.src = track.previewUrl
         audioRef.current.play()
-        setPlayingTrackId(track.id)
+          .then(() => setPlayingTrackId(track.id))
+          .catch(error => {
+            console.error('Audio playback failed:', error)
+            setPlayingTrackId(null)
+          })
       }
     }
   }
@@ -243,10 +259,25 @@ Join: ${url}`
     const audio = audioRef.current
     if (!audio) return
 
-    const handleEnded = () => setPlayingTrackId(null)
+    const handleEnded = () => {
+      setPlayingTrackId(null)
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
+    }
     audio.addEventListener('ended', handleEnded)
     return () => audio.removeEventListener('ended', handleEnded)
-  }, [])
+  }, [resumeBackgroundMusic])
+
+  useEffect(() => {
+    return () => {
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
+    }
+  }, [resumeBackgroundMusic])
 
   const isHost = currentParticipant.is_host
   const allSubmitted = participants.every(p => p.has_submitted)
@@ -615,6 +646,9 @@ Join: ${url}`
 
     return (
       <main className="flex min-h-screen flex-col items-center p-4 pt-8">
+        {/* Hidden audio element for previews */}
+        <audio ref={audioRef} />
+
         <div className="w-full max-w-4xl">
           <div className="max-w-md mx-auto lg:max-w-none">
             <GameBreadcrumbs
@@ -671,13 +705,33 @@ Join: ${url}`
                           }`}
                         >
                           <span className="text-sm text-muted-foreground w-5">{index + 1}.</span>
-                          {track.albumArt && (
-                            <img
-                              src={track.albumArt}
-                              alt=""
-                              className="w-10 h-10 rounded flex-shrink-0"
-                            />
-                          )}
+                          <div className="relative flex-shrink-0">
+                            {track.albumArt ? (
+                              <img
+                                src={track.albumArt}
+                                alt={track.name}
+                                className={`w-10 h-10 rounded ${
+                                  track.previewUrl ? 'ring-1 ring-border/40' : ''
+                                }`}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                                <span className="text-muted-foreground text-xs">No art</span>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => togglePlay(track)}
+                              disabled={!track.previewUrl}
+                              className="absolute inset-0 flex items-center justify-center bg-black/40 rounded opacity-0 hover:opacity-100 transition-opacity disabled:opacity-50"
+                              aria-label={playingTrackId === track.id ? 'Pause preview' : 'Play preview'}
+                            >
+                              {playingTrackId === track.id ? (
+                                <Pause className="w-4 h-4 text-white" />
+                              ) : (
+                                <Play className="w-4 h-4 text-white" />
+                              )}
+                            </button>
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">{track.name}</p>
                             <p className="text-xs text-muted-foreground truncate">{track.artist}</p>
@@ -1038,7 +1092,7 @@ Join: ${url}`
                         {track.albumArt ? (
                           <img
                             src={track.albumArt}
-                            alt=""
+                            alt={track.name}
                             className="w-12 h-12 rounded"
                           />
                         ) : (
@@ -1052,9 +1106,9 @@ Join: ${url}`
                           className="absolute inset-0 flex items-center justify-center bg-black/40 rounded opacity-0 hover:opacity-100 transition-opacity disabled:opacity-50"
                         >
                           {playingTrackId === track.id ? (
-                            <span className="text-white text-lg">&#9208;</span>
+                            <Pause className="w-4 h-4 text-white" />
                           ) : (
-                            <span className="text-white text-lg">&#9654;</span>
+                            <Play className="w-4 h-4 text-white" />
                           )}
                         </button>
                         {/* Christmas indicator */}
@@ -1184,13 +1238,31 @@ Join: ${url}`
                         >
                           <span className="text-sm text-muted-foreground w-5">{index + 1}.</span>
                           <div className="relative flex-shrink-0">
-                            {track.albumArt && (
+                            {track.albumArt ? (
                               <img
                                 src={track.albumArt}
-                                alt=""
-                                className="w-8 h-8 rounded"
+                                alt={track.name}
+                                className={`w-10 h-10 rounded ${
+                                  track.hasPreview ? 'ring-1 ring-border/40' : ''
+                                }`}
                               />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                                <span className="text-muted-foreground text-[10px]">No art</span>
+                              </div>
                             )}
+                            <button
+                              onClick={() => togglePlay(track)}
+                              disabled={!track.hasPreview}
+                              className="absolute inset-0 flex items-center justify-center bg-black/40 rounded opacity-0 hover:opacity-100 transition-opacity disabled:opacity-50"
+                              aria-label={playingTrackId === track.id ? 'Pause preview' : 'Play preview'}
+                            >
+                              {playingTrackId === track.id ? (
+                                <Pause className="w-4 h-4 text-white" />
+                              ) : (
+                                <Play className="w-4 h-4 text-white" />
+                              )}
+                            </button>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">{track.name}</p>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +14,8 @@ import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
 import type { Room, Participant } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
+import { useBackgroundMusic } from '@/components/background-music'
+import { Play, Pause } from 'lucide-react'
 
 interface LobbyViewProps {
   room: Room
@@ -49,7 +51,12 @@ export function LobbyView({
     track_name: string
     artist_name: string
     album_art_url: string | null
+    preview_url: string | null
   }>>([])
+  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const backgroundWasPlayingRef = useRef(false)
+  const { isPlaying: isBackgroundPlaying, stop: stopBackgroundMusic, play: resumeBackgroundMusic } = useBackgroundMusic()
 
   // Check if user has Spotify connected
   useEffect(() => {
@@ -70,7 +77,7 @@ export function LobbyView({
     const fetchSubmissions = async () => {
       const { data } = await supabase
         .from('submissions')
-        .select('track_id, track_name, artist_name, album_art_url')
+        .select('track_id, track_name, artist_name, album_art_url, preview_url')
         .eq('participant_id', currentParticipant.id)
         .order('submission_order', { ascending: true })
 
@@ -99,6 +106,57 @@ export function LobbyView({
 
   const settings = room.settings || DEFAULT_GAME_SETTINGS
   const displayName = room.name?.trim() || room.room_code
+
+  const togglePlay = (track: { track_id: string, preview_url: string | null }) => {
+    if (!track.preview_url) return
+
+    if (playingTrackId === track.track_id) {
+      audioRef.current?.pause()
+      setPlayingTrackId(null)
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
+    } else {
+      if (audioRef.current) {
+        if (isBackgroundPlaying) {
+          backgroundWasPlayingRef.current = true
+          stopBackgroundMusic()
+        }
+        audioRef.current.src = track.preview_url
+        audioRef.current.play()
+          .then(() => setPlayingTrackId(track.track_id))
+          .catch(error => {
+            console.error('Audio playback failed:', error)
+            setPlayingTrackId(null)
+          })
+      }
+    }
+  }
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const handleEnded = () => {
+      setPlayingTrackId(null)
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
+    }
+    audio.addEventListener('ended', handleEnded)
+    return () => audio.removeEventListener('ended', handleEnded)
+  }, [resumeBackgroundMusic])
+
+  useEffect(() => {
+    return () => {
+      if (backgroundWasPlayingRef.current) {
+        resumeBackgroundMusic()
+        backgroundWasPlayingRef.current = false
+      }
+    }
+  }, [resumeBackgroundMusic])
 
   useEffect(() => {
     setRoomNameInput(room.name ?? '')
@@ -165,6 +223,9 @@ Join: ${url}`
 
   return (
     <main className="flex min-h-screen flex-col items-center p-4 pt-8">
+      {/* Hidden audio element for song previews */}
+      <audio ref={audioRef} />
+
       <div className="w-full max-w-4xl">
         <div className="max-w-md mx-auto lg:max-w-none">
           <GameBreadcrumbs currentStage="lobby" />
@@ -322,16 +383,36 @@ Join: ${url}`
                       {mySubmissions.map((track, index) => (
                         <div
                           key={track.track_id}
-                          className="flex items-center gap-2 p-1.5 rounded bg-muted/30"
+                          className={`flex items-center gap-2 p-1.5 rounded bg-muted/30 ${
+                            playingTrackId === track.track_id ? 'ring-1 ring-primary/50' : ''
+                          }`}
                         >
                           <span className="text-xs text-muted-foreground w-4">{index + 1}.</span>
-                          {track.album_art_url && (
-                            <img
-                              src={track.album_art_url}
-                              alt=""
-                              className="w-8 h-8 rounded flex-shrink-0"
-                            />
-                          )}
+                          <div className="relative flex-shrink-0">
+                            {track.album_art_url ? (
+                              <img
+                                src={track.album_art_url}
+                                alt={track.track_name}
+                                className={`w-10 h-10 rounded ${track.preview_url ? 'ring-1 ring-border/40' : ''}`}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+                                <span className="text-muted-foreground text-[10px]">No art</span>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => togglePlay(track)}
+                              disabled={!track.preview_url}
+                              className="absolute inset-0 flex items-center justify-center bg-black/40 rounded opacity-0 hover:opacity-100 transition-opacity disabled:opacity-50"
+                              aria-label={playingTrackId === track.track_id ? 'Pause preview' : 'Play preview'}
+                            >
+                              {playingTrackId === track.track_id ? (
+                                <Pause className="w-4 h-4 text-white" />
+                              ) : (
+                                <Play className="w-4 h-4 text-white" />
+                              )}
+                            </button>
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{track.track_name}</p>
                             <p className="text-xs text-muted-foreground truncate">{track.artist_name}</p>
