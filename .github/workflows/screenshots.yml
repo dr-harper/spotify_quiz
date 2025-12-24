@@ -1,0 +1,52 @@
+name: Generate Screenshots
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/app/demo/**'
+      - 'src/lib/demo-data.ts'
+      - 'tests/screenshots.spec.ts'
+  workflow_dispatch:
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium webkit --with-deps
+
+      - name: Run screenshot tests
+        run: npm run test:screenshots
+        env:
+          CI: true
+
+      - name: Upload screenshots as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+          retention-days: 30
+
+      - name: Commit and push screenshots
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Update screenshots [skip ci]'
+          file_pattern: 'screenshots/*.png'
+          commit_user_name: 'github-actions[bot]'
+          commit_user_email: 'github-actions[bot]@users.noreply.github.com'

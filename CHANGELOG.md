@@ -6,6 +6,14 @@ All notable changes to Festive Frequencies will be documented in this file.
 
 ### Added
 
+- **Demo Mode & Screenshots**: New demo pages for screenshot generation
+  - `/demo/home` - Home/join screen with mock data
+  - `/demo/lobby` - Game lobby with mock participants
+  - `/demo/submission` - Song selection interface with mock tracks
+  - Playwright test suite for automated screenshot capture
+  - GitHub Action to auto-generate screenshots on demo page changes
+  - Updated README with screenshots and proper documentation
+
 - **Background Music**: Jazz music plays in the lobby while waiting for players
   - Automatically stops when game starts (song selection phase)
   - Loops continuously at comfortable volume (30%)
