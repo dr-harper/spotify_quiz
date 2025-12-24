@@ -551,7 +551,7 @@ Join: ${url}`
       }
 
       // Mark participant as submitted and save AI summary
-      const { error: updateError } = await supabase
+      const { data: updatedParticipant, error: updateError } = await supabase
         .from('participants')
         .update({
           has_submitted: true,
@@ -559,8 +559,20 @@ Join: ${url}`
           mood_tag: moodTag,
         })
         .eq('id', currentParticipant.id)
+        .select()
+        .single()
 
-      if (updateError) throw updateError
+      if (updateError) {
+        console.error('Participant update error:', updateError.message, updateError.details, updateError.hint)
+        throw updateError
+      }
+
+      if (!updatedParticipant) {
+        console.error('Participant update returned no data. ID:', currentParticipant.id)
+        throw new Error('Failed to update participant status')
+      }
+
+      console.log('Participant updated successfully:', updatedParticipant.id, 'has_submitted:', updatedParticipant.has_submitted)
 
       clearDraft()
       setHasSubmitted(true)
