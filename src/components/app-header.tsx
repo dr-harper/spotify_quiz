@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
+import { useBackgroundMusic } from '@/components/background-music'
+import { Volume2, VolumeX } from 'lucide-react'
 
 export function AppHeader() {
   const [user, setUser] = useState<User | null>(null)
@@ -31,6 +33,7 @@ export function AppHeader() {
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
+  const { isPlaying, stop: stopMusic, play: playMusic } = useBackgroundMusic()
 
   useEffect(() => {
     const getUser = async () => {
@@ -69,6 +72,14 @@ export function AppHeader() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     router.push('/')
+  }
+
+  const handleToggleMusic = () => {
+    if (isPlaying) {
+      stopMusic()
+    } else {
+      playMusic()
+    }
   }
 
   const handleConnectSpotify = async () => {
@@ -134,54 +145,65 @@ export function AppHeader() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* User info & Menu */}
-        {!isLoading && user && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium hidden sm:inline">{userMeta.name}</span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-9 w-9 p-0">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={userMeta.avatar || undefined} alt={userMeta.name} />
-                    <AvatarFallback className="text-xs">
-                      {userMeta.name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {userMeta.isGuest && (
-                  <>
-                    <DropdownMenuItem
-                      onClick={handleConnectSpotify}
-                      disabled={isConnecting}
-                      className="text-[#1DB954]"
-                    >
-                      {isConnecting ? 'Connecting...' : 'Connect Spotify'}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
-                <DropdownMenuItem onClick={() => setShowAbout(true)}>
-                  About
-                </DropdownMenuItem>
-                {process.env.NODE_ENV !== 'production' && (
-                  <DropdownMenuItem
-                    onClick={handleSeedTestData}
-                    disabled={isSeeding}
-                    className="text-amber-500"
-                  >
-                    {isSeeding ? 'Creating...' : 'Create Test Game'}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={isPlaying ? 'Mute lobby music' : 'Unmute lobby music'}
+            onClick={handleToggleMusic}
+          >
+            {isPlaying ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
+          </Button>
+
+          {/* User info & Menu */}
+          {!isLoading && user && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium hidden sm:inline">{userMeta.name}</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={userMeta.avatar || undefined} alt={userMeta.name} />
+                      <AvatarFallback className="text-xs">
+                        {userMeta.name.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {userMeta.isGuest && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={handleConnectSpotify}
+                        disabled={isConnecting}
+                        className="text-[#1DB954]"
+                      >
+                        {isConnecting ? 'Connecting...' : 'Connect Spotify'}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem onClick={() => setShowAbout(true)}>
+                    About
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
+                  {process.env.NODE_ENV !== 'production' && (
+                    <DropdownMenuItem
+                      onClick={handleSeedTestData}
+                      disabled={isSeeding}
+                      className="text-amber-500"
+                    >
+                      {isSeeding ? 'Creating...' : 'Create Test Game'}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* About Dialog */}
