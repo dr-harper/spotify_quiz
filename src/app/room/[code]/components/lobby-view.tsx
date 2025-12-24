@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { createClient } from '@/lib/supabase/client'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
-import type { Room, Participant } from '@/types/database'
+import type { Room, Participant, PlaylistSummary } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { useBackgroundMusic } from '@/components/background-music'
@@ -54,6 +54,8 @@ export function LobbyView({
     preview_url: string | null
   }>>([])
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
+  const [playlistSummary, setPlaylistSummary] = useState<PlaylistSummary | null>(room.playlist_summary || null)
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const backgroundWasPlayingRef = useRef(false)
   const { isPlaying: isBackgroundPlaying, stop: stopBackgroundMusic, play: resumeBackgroundMusic } = useBackgroundMusic()
@@ -88,6 +90,45 @@ export function LobbyView({
 
     fetchSubmissions()
   }, [currentParticipant.has_submitted, currentParticipant.id, supabase])
+
+  // Generate playlist summary when all players have submitted
+  const allPlayersSubmitted = participants.length >= 2 && participants.every(p => p.has_submitted)
+
+  useEffect(() => {
+    // Only generate if:
+    // - All players have submitted
+    // - We don't already have a summary
+    // - We're not currently generating
+    if (!allPlayersSubmitted || playlistSummary || isGeneratingSummary) return
+
+    const generateSummary = async () => {
+      setIsGeneratingSummary(true)
+      try {
+        const response = await fetch('/api/summarise-playlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: room.id }),
+        })
+        const data = await response.json()
+        if (data.summary) {
+          setPlaylistSummary(data.summary)
+        }
+      } catch (error) {
+        console.error('Failed to generate playlist summary:', error)
+      } finally {
+        setIsGeneratingSummary(false)
+      }
+    }
+
+    generateSummary()
+  }, [allPlayersSubmitted, playlistSummary, isGeneratingSummary, room.id])
+
+  // Update summary from room prop if it changes
+  useEffect(() => {
+    if (room.playlist_summary && !playlistSummary) {
+      setPlaylistSummary(room.playlist_summary)
+    }
+  }, [room.playlist_summary, playlistSummary])
 
   const handleRemoveParticipant = async (participantId: string) => {
     if (!onRemoveParticipant) return
@@ -594,6 +635,51 @@ Join: ${url}`
                 )}
               </CardContent>
             </Card>
+
+            {/* Playlist Summary Card - shown when all players have submitted */}
+            {(playlistSummary || isGeneratingSummary) && (
+              <Card className="border-2 border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-pink-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <span>✨</span>
+                    <span>Playlist Vibes</span>
+                    {playlistSummary && (
+                      <Badge variant="secondary" className="ml-auto text-xs">
+                        {playlistSummary.vibe}
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {isGeneratingSummary ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-pulse text-muted-foreground">
+                        Analysing your playlist...
+                      </div>
+                    </div>
+                  ) : playlistSummary ? (
+                    <>
+                      <p className="text-sm text-foreground/90">
+                        {playlistSummary.description}
+                      </p>
+                      {playlistSummary.funFacts.length > 0 && (
+                        <div className="space-y-1.5 pt-2 border-t border-border/50">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fun Facts</p>
+                          <ul className="space-y-1">
+                            {playlistSummary.funFacts.map((fact, index) => (
+                              <li key={index} className="text-xs text-muted-foreground flex items-start gap-2">
+                                <span className="text-purple-400">•</span>
+                                <span>{fact}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Spacer to push Start Quiz to bottom on desktop */}
             <div className="hidden lg:flex lg:flex-grow" />

@@ -35,6 +35,13 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   themeColor: 'green',
 }
 
+export interface PlaylistSummary {
+  description: string  // 2-3 sentence summary of the overall playlist
+  vibe: string         // Short vibe tag, e.g. "Nostalgic Christmas Party"
+  funFacts: string[]   // 3-5 fun observations about the group's picks
+  generatedAt: string  // ISO timestamp
+}
+
 export interface Room {
   id: string
   room_code: string
@@ -43,6 +50,7 @@ export interface Room {
   status: RoomStatus
   current_round: number
   settings: GameSettings | null
+  playlist_summary: PlaylistSummary | null
   created_at: string
   updated_at: string
 }
