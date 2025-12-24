@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Room, Participant, Track } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { useBackgroundMusic } from '@/components/background-music'
+import { Play, Pause } from 'lucide-react'
 
 interface SubmissionViewProps {
   room: Room
@@ -244,7 +245,11 @@ Join: ${url}`
         }
         audioRef.current.src = track.previewUrl
         audioRef.current.play()
-        setPlayingTrackId(track.id)
+          .then(() => setPlayingTrackId(track.id))
+          .catch(error => {
+            console.error('Audio playback failed:', error)
+            setPlayingTrackId(null)
+          })
       }
     }
   }
@@ -704,7 +709,7 @@ Join: ${url}`
                             {track.albumArt ? (
                               <img
                                 src={track.albumArt}
-                                alt=""
+                                alt={track.name}
                                 className={`w-10 h-10 rounded ${
                                   track.previewUrl ? 'ring-1 ring-border/40' : ''
                                 }`}
@@ -721,9 +726,9 @@ Join: ${url}`
                               aria-label={playingTrackId === track.id ? 'Pause preview' : 'Play preview'}
                             >
                               {playingTrackId === track.id ? (
-                                <span className="text-white text-lg">&#9208;</span>
+                                <Pause className="w-4 h-4 text-white" />
                               ) : (
-                                <span className="text-white text-lg">&#9654;</span>
+                                <Play className="w-4 h-4 text-white" />
                               )}
                             </button>
                           </div>
@@ -1087,7 +1092,7 @@ Join: ${url}`
                         {track.albumArt ? (
                           <img
                             src={track.albumArt}
-                            alt=""
+                            alt={track.name}
                             className="w-12 h-12 rounded"
                           />
                         ) : (
@@ -1101,9 +1106,9 @@ Join: ${url}`
                           className="absolute inset-0 flex items-center justify-center bg-black/40 rounded opacity-0 hover:opacity-100 transition-opacity disabled:opacity-50"
                         >
                           {playingTrackId === track.id ? (
-                            <span className="text-white text-lg">&#9208;</span>
+                            <Pause className="w-4 h-4 text-white" />
                           ) : (
-                            <span className="text-white text-lg">&#9654;</span>
+                            <Play className="w-4 h-4 text-white" />
                           )}
                         </button>
                         {/* Christmas indicator */}
@@ -1236,7 +1241,7 @@ Join: ${url}`
                             {track.albumArt ? (
                               <img
                                 src={track.albumArt}
-                                alt=""
+                                alt={track.name}
                                 className={`w-10 h-10 rounded ${
                                   track.hasPreview ? 'ring-1 ring-border/40' : ''
                                 }`}
@@ -1253,9 +1258,9 @@ Join: ${url}`
                               aria-label={playingTrackId === track.id ? 'Pause preview' : 'Play preview'}
                             >
                               {playingTrackId === track.id ? (
-                                <span className="text-white text-lg">&#9208;</span>
+                                <Pause className="w-4 h-4 text-white" />
                               ) : (
-                                <span className="text-white text-lg">&#9654;</span>
+                                <Play className="w-4 h-4 text-white" />
                               )}
                             </button>
                           </div>

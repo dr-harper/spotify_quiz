@@ -15,6 +15,7 @@ import type { Room, Participant } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { useBackgroundMusic } from '@/components/background-music'
+import { Play, Pause } from 'lucide-react'
 
 interface LobbyViewProps {
   room: Room
@@ -124,7 +125,11 @@ export function LobbyView({
         }
         audioRef.current.src = track.preview_url
         audioRef.current.play()
-        setPlayingTrackId(track.track_id)
+          .then(() => setPlayingTrackId(track.track_id))
+          .catch(error => {
+            console.error('Audio playback failed:', error)
+            setPlayingTrackId(null)
+          })
       }
     }
   }
@@ -387,7 +392,7 @@ Join: ${url}`
                             {track.album_art_url ? (
                               <img
                                 src={track.album_art_url}
-                                alt=""
+                                alt={track.track_name}
                                 className={`w-10 h-10 rounded ${track.preview_url ? 'ring-1 ring-border/40' : ''}`}
                               />
                             ) : (
@@ -402,9 +407,9 @@ Join: ${url}`
                               aria-label={playingTrackId === track.track_id ? 'Pause preview' : 'Play preview'}
                             >
                               {playingTrackId === track.track_id ? (
-                                <span className="text-white text-lg">&#9208;</span>
+                                <Pause className="w-4 h-4 text-white" />
                               ) : (
-                                <span className="text-white text-lg">&#9654;</span>
+                                <Play className="w-4 h-4 text-white" />
                               )}
                             </button>
                           </div>
