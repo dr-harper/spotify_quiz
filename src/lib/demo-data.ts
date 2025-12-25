@@ -131,6 +131,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     duration_ms: 241000,
     popularity: 85,
     is_chameleon: false,
+    trivia_facts: null,
   },
   {
     id: 'sub-2',
@@ -148,6 +149,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     duration_ms: 210000,
     popularity: 78,
     is_chameleon: false,
+    trivia_facts: null,
   },
   // James's submissions
   {
@@ -166,6 +168,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     duration_ms: 271000,
     popularity: 82,
     is_chameleon: false,
+    trivia_facts: null,
   },
   {
     id: 'sub-4',
@@ -183,6 +186,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     duration_ms: 232000,
     popularity: 75,
     is_chameleon: true,
+    trivia_facts: null,
   },
   // Emma's submissions
   {
@@ -201,6 +205,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     duration_ms: 262000,
     popularity: 88,
     is_chameleon: false,
+    trivia_facts: null,
   },
   {
     id: 'sub-6',
@@ -218,6 +223,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     duration_ms: 205000,
     popularity: 80,
     is_chameleon: false,
+    trivia_facts: null,
   },
 ]
 

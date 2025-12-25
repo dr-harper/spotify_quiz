@@ -89,6 +89,8 @@ export interface Submission {
   popularity: number | null
   // Chameleon mode - this song is disguised as someone else's taste
   is_chameleon: boolean
+  // AI-generated trivia facts with citations
+  trivia_facts: TriviaFact[] | null
 }
 
 export type SubmissionInsert = {
@@ -164,14 +166,35 @@ export interface Track {
   isChameleon?: boolean // Marked as the chameleon pick
 }
 
+// Trivia question types from AI generation
+export type TriviaFactType =
+  | 'chart_position'
+  | 'film_appearance'
+  | 'award'
+  | 'songwriter'
+  | 'cover'
+  | 'recording'
+  | 'collaboration'
+  | 'year'
+
+// AI-generated trivia question with multiple choice options
+export interface TriviaFact {
+  question_type: TriviaFactType
+  question: string              // The trivia question
+  correct_answer: string        // The correct answer
+  wrong_answers: [string, string, string]  // 3 plausible wrong answers
+  source: string                // Citation source (Wikipedia, Billboard, etc.)
+}
+
 // Trivia question types
-export type TriviaQuestionType = 'data'
+export type TriviaQuestionType = 'data' | 'fact'
 export type TriviaCategory =
   | 'artist'      // Who sang this song?
   | 'year'        // Release year questions
   | 'duration'    // Song length
   | 'popularity'  // Spotify popularity
   | 'album'       // Album matching
+  | 'fact'        // AI-generated fact questions
 
 export interface TriviaQuestion {
   id: string

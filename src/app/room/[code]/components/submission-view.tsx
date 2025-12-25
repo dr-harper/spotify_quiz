@@ -577,6 +577,21 @@ Join: ${url}`
       clearDraft()
       setHasSubmitted(true)
 
+      // Generate trivia facts in the background (non-blocking)
+      fetch('/api/trivia/generate-facts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tracks: selectedTracks.map(t => ({
+            id: t.id,
+            name: t.name,
+            artist: t.artist,
+            releaseYear: t.releaseYear,
+          })),
+          participantId: currentParticipant.id,
+        }),
+      }).catch(err => console.warn('Trivia fact generation failed:', err))
+
       // Navigate back to lobby after successful submission
       onNavigateToLobby()
     } catch (error: unknown) {
