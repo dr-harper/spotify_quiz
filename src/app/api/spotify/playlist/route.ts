@@ -44,6 +44,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Could not get Spotify user ID' }, { status: 400 })
     }
 
+    // Get room details (name and AI summary)
+    const { data: room } = await supabase
+      .from('rooms')
+      .select('name, room_code, playlist_summary')
+      .eq('id', roomId)
+      .single()
+
     // Get all submissions for this room
     const { data: participants } = await supabase
       .from('participants')
@@ -69,6 +76,14 @@ export async function POST(request: NextRequest) {
     // Also ensures player variety (no consecutive songs from same person)
     const orderedSubmissions = await orderSongsWithGemini(submissions)
 
+    // Build playlist name and description
+    const finalPlaylistName = room?.name
+      ? `Festive Frequencies - ${room.name}`
+      : playlistName || 'Festive Frequencies Quiz'
+
+    const finalDescription = room?.playlist_summary
+      || `Songs from our Festive Frequencies game! ${orderedSubmissions.length} tracks picked by friends, ordered by AI for optimal energy flow.`
+
     // Create playlist
     const createResponse = await fetch(
       `https://api.spotify.com/v1/users/${userId}/playlists`,
@@ -79,8 +94,8 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: playlistName || 'Festive Frequencies Quiz',
-          description: `Songs from our Festive Frequencies game! ${orderedSubmissions.length} tracks picked by friends, ordered by AI for optimal energy flow.`,
+          name: finalPlaylistName,
+          description: finalDescription,
           public: false,
         }),
       }
@@ -133,7 +148,7 @@ export async function POST(request: NextRequest) {
             name: s.track_name,
             artist: s.artist_name,
           })),
-          playlistName: playlistName || 'Festive Frequencies',
+          playlistName: room?.name || 'Festive Frequencies',
         }),
       })
 
@@ -142,12 +157,23 @@ export async function POST(request: NextRequest) {
       if (coverData.success && coverData.image) {
         coverImage = coverData.image // Save for response (PNG)
 
-        // Convert PNG to JPEG for Spotify (Spotify only accepts JPEG)
+        // Convert PNG to JPEG for Spotify (Spotify only accepts JPEG, max 256KB)
         const pngBuffer = Buffer.from(coverData.image, 'base64')
-        const jpegBuffer = await sharp(pngBuffer)
-          .jpeg({ quality: 80 })
+        let jpegBuffer = await sharp(pngBuffer)
+          .resize(640, 640) // Resize to reduce file size
+          .jpeg({ quality: 75 })
           .toBuffer()
+
+        // If still too large, reduce quality further
+        if (jpegBuffer.length > 256 * 1024) {
+          jpegBuffer = await sharp(pngBuffer)
+            .resize(500, 500)
+            .jpeg({ quality: 60 })
+            .toBuffer()
+        }
+
         const jpegBase64 = jpegBuffer.toString('base64')
+        console.log(`Cover image size: ${Math.round(jpegBase64.length / 1024)}KB (limit: 256KB)`)
 
         // Upload cover to Spotify
         const uploadResponse = await fetch(
