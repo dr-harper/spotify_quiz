@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { orderSongsWithGemini } from '@/lib/gemini'
+import sharp from 'sharp'
 
 export async function POST(request: NextRequest) {
   try {
@@ -139,7 +140,14 @@ export async function POST(request: NextRequest) {
       const coverData = await coverResponse.json()
 
       if (coverData.success && coverData.image) {
-        coverImage = coverData.image // Save for response
+        coverImage = coverData.image // Save for response (PNG)
+
+        // Convert PNG to JPEG for Spotify (Spotify only accepts JPEG)
+        const pngBuffer = Buffer.from(coverData.image, 'base64')
+        const jpegBuffer = await sharp(pngBuffer)
+          .jpeg({ quality: 80 })
+          .toBuffer()
+        const jpegBase64 = jpegBuffer.toString('base64')
 
         // Upload cover to Spotify
         const uploadResponse = await fetch(
@@ -150,7 +158,7 @@ export async function POST(request: NextRequest) {
               Authorization: `Bearer ${spotifyToken}`,
               'Content-Type': 'image/jpeg',
             },
-            body: coverData.image, // base64 encoded JPEG
+            body: jpegBase64,
           }
         )
 
@@ -158,7 +166,8 @@ export async function POST(request: NextRequest) {
           console.log('Successfully uploaded custom playlist cover')
           coverGenerated = true
         } else {
-          console.warn('Failed to upload cover to Spotify:', uploadResponse.status)
+          const errorText = await uploadResponse.text()
+          console.warn('Failed to upload cover to Spotify:', uploadResponse.status, errorText)
         }
       }
     } catch (coverError) {
