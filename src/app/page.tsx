@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Suspense, useEffect, useState } from 'react'
 import { FestiveBackground } from '@/components/festive-background'
 import { useBackgroundMusic } from '@/components/background-music'
@@ -282,6 +283,19 @@ function HomeContent() {
               <p className="text-xs text-center text-muted-foreground">
                 Spotify login enables saving playlists to your account
               </p>
+
+              {/* Try Demo Link */}
+              <div className="pt-2">
+                <Link href="/demo/walkthrough" className="block">
+                  <Button
+                    variant="ghost"
+                    className="w-full text-muted-foreground hover:text-foreground"
+                  >
+                    <span className="mr-2">👋</span>
+                    Take a Tour
+                  </Button>
+                </Link>
+              </div>
             </>
           )}
         </CardContent>

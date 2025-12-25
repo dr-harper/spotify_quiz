@@ -5,6 +5,26 @@
 
 import type { Room, Participant, Submission, GameSettings, Track } from '@/types/database'
 
+// Placeholder album art colours (festive palette)
+const ALBUM_COLOURS = [
+  '#c41e3a', // Christmas red
+  '#165b33', // Christmas green
+  '#bb8e35', // Gold
+  '#4a6fa5', // Winter blue
+  '#7b3f61', // Plum
+  '#2d5a27', // Forest green
+  '#8b0000', // Dark red
+  '#1e4d2b', // Pine green
+]
+
+// Generate a simple SVG placeholder with a colour based on the ID
+const getPlaceholderAlbumArt = (id: string): string => {
+  const hash = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  const colour = ALBUM_COLOURS[hash % ALBUM_COLOURS.length]
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect fill="${colour}" width="300" height="300"/><circle cx="150" cy="150" r="80" fill="${colour}" stroke="rgba(255,255,255,0.3)" stroke-width="4"/><circle cx="150" cy="150" r="25" fill="rgba(0,0,0,0.3)"/></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
 export const DEMO_GAME_SETTINGS: GameSettings = {
   songsRequired: 5,
   christmasSongsRequired: 2,
@@ -25,7 +45,7 @@ export const DEMO_ROOM: Room = {
   id: 'demo-room-id',
   room_code: 'JINGLE',
   host_id: 'demo-user-1',
-  name: 'Christmas Party 2024',
+  name: 'Christmas Quiz',
   status: 'LOBBY',
   current_round: 0,
   settings: DEMO_GAME_SETTINGS,
@@ -101,7 +121,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     track_id: 'track-1',
     track_name: 'All I Want for Christmas Is You',
     artist_name: 'Mariah Carey',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273073c569fdb28a8ce4cba66b2',
+    album_art_url: getPlaceholderAlbumArt('sub-1'),
     preview_url: 'https://p.scdn.co/mp3-preview/sample',
     submission_order: 1,
     played: true,
@@ -118,7 +138,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     track_id: 'track-2',
     track_name: "It's Beginning to Look a Lot Like Christmas",
     artist_name: 'Michael Bublé',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b2736a0a3d5b1e58cce1bfa5d53a',
+    album_art_url: getPlaceholderAlbumArt('sub-2'),
     preview_url: 'https://p.scdn.co/mp3-preview/sample',
     submission_order: 2,
     played: false,
@@ -136,7 +156,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     track_id: 'track-3',
     track_name: 'Fairytale of New York',
     artist_name: 'The Pogues',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273e17011a1382bfe7e1d3b9286',
+    album_art_url: getPlaceholderAlbumArt('sub-3'),
     preview_url: 'https://p.scdn.co/mp3-preview/sample',
     submission_order: 1,
     played: true,
@@ -153,7 +173,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     track_id: 'track-4',
     track_name: 'Merry Xmas Everybody',
     artist_name: 'Slade',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b27376dbef01e8c15dc2eb5e0d62',
+    album_art_url: getPlaceholderAlbumArt('sub-4'),
     preview_url: 'https://p.scdn.co/mp3-preview/sample',
     submission_order: 2,
     played: false,
@@ -171,7 +191,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     track_id: 'track-5',
     track_name: 'Last Christmas',
     artist_name: 'Wham!',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273f2d7f00b0a8e83e9b7d43c36',
+    album_art_url: getPlaceholderAlbumArt('sub-5'),
     preview_url: 'https://p.scdn.co/mp3-preview/sample',
     submission_order: 1,
     played: true,
@@ -188,7 +208,7 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     track_id: 'track-6',
     track_name: 'Santa Tell Me',
     artist_name: 'Ariana Grande',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273c3af0c2b2ff1ffc4b8d63ee1',
+    album_art_url: getPlaceholderAlbumArt('sub-6'),
     preview_url: 'https://p.scdn.co/mp3-preview/sample',
     submission_order: 2,
     played: false,
@@ -208,7 +228,7 @@ export const DEMO_SEARCH_RESULTS: Track[] = [
     name: 'Driving Home for Christmas',
     artist: 'Chris Rea',
     albumName: 'The Very Best of Chris Rea',
-    albumArt: 'https://i.scdn.co/image/ab67616d0000b27378b5929b9e58e4dc11966bf3',
+    albumArt: getPlaceholderAlbumArt('search-1'),
     releaseDate: '1986-12-01',
     releaseYear: 1986,
     durationMs: 238000,
@@ -224,7 +244,7 @@ export const DEMO_SEARCH_RESULTS: Track[] = [
     name: 'Rockin\' Around the Christmas Tree',
     artist: 'Brenda Lee',
     albumName: 'Rockin\' Around the Christmas Tree',
-    albumArt: 'https://i.scdn.co/image/ab67616d0000b273bce456da55e0765446d5f2d6',
+    albumArt: getPlaceholderAlbumArt('search-2'),
     releaseDate: '1958-01-01',
     releaseYear: 1958,
     durationMs: 125000,
@@ -240,7 +260,7 @@ export const DEMO_SEARCH_RESULTS: Track[] = [
     name: 'Let It Snow! Let It Snow! Let It Snow!',
     artist: 'Dean Martin',
     albumName: 'A Winter Romance',
-    albumArt: 'https://i.scdn.co/image/ab67616d0000b273e85b68b8e42de48f8d9adb27',
+    albumArt: getPlaceholderAlbumArt('search-3'),
     releaseDate: '1959-01-01',
     releaseYear: 1959,
     durationMs: 121000,
@@ -260,7 +280,7 @@ export const DEMO_SELECTED_TRACKS: Track[] = [
     name: 'All I Want for Christmas Is You',
     artist: 'Mariah Carey',
     albumName: 'Merry Christmas',
-    albumArt: 'https://i.scdn.co/image/ab67616d0000b273073c569fdb28a8ce4cba66b2',
+    albumArt: getPlaceholderAlbumArt('selected-1'),
     releaseDate: '1994-11-01',
     releaseYear: 1994,
     durationMs: 241000,
@@ -276,7 +296,7 @@ export const DEMO_SELECTED_TRACKS: Track[] = [
     name: 'Last Christmas',
     artist: 'Wham!',
     albumName: 'Last Christmas',
-    albumArt: 'https://i.scdn.co/image/ab67616d0000b273f2d7f00b0a8e83e9b7d43c36',
+    albumArt: getPlaceholderAlbumArt('selected-2'),
     releaseDate: '1984-12-03',
     releaseYear: 1984,
     durationMs: 262000,
@@ -292,7 +312,7 @@ export const DEMO_SELECTED_TRACKS: Track[] = [
     name: 'Underneath the Tree',
     artist: 'Kelly Clarkson',
     albumName: 'Wrapped in Red',
-    albumArt: 'https://i.scdn.co/image/ab67616d0000b273b4c623cf3c3cc4d8e8f5f76a',
+    albumArt: getPlaceholderAlbumArt('selected-3'),
     releaseDate: '2013-10-29',
     releaseYear: 2013,
     durationMs: 227000,
