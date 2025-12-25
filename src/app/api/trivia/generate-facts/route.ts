@@ -63,34 +63,34 @@ export async function POST(request: NextRequest) {
       .map((t, i) => `${i + 1}. "${t.name}" by ${t.artist}${t.releaseYear ? ` (${t.releaseYear})` : ''}`)
       .join('\n')
 
-    const prompt = `You are a music trivia expert creating multiple-choice questions. For each song, generate 1-2 trivia questions with plausible wrong answers.
+    const prompt = `You are a music trivia expert creating multiple-choice questions. Generate 1 trivia question per song where you have confident knowledge.
 
-QUESTION TYPES (IMPORTANT - use variety, don't just pick chart_position!):
-- film_appearance: "Which film/TV show featured X?" - PRIORITISE this if the song appeared in any film, TV show, advert, or trailer
-- award: "What award did X win?" or "Which category did X win at the Grammys?" - use for award-winning songs
-- songwriter: "Who wrote/co-wrote X?" - great for songs with famous songwriters (e.g. Max Martin, Diane Warren)
-- cover: "Who famously covered X?" or "Which artist originally recorded X?" - use for songs with notable covers
-- recording: "Where was X recorded?" or "Which producer worked on X?" - interesting studio facts
-- collaboration: "Who featured on X?" or "Which artist did X collaborate with?" - for duets/features
-- year: "In what year was X released?" or "In what year did X reach #1?" - milestone years
-- chart_position: "What position did X reach?" - USE SPARINGLY, only for #1 hits or surprising positions
+ACCURACY RULES:
+- Only include facts you are CERTAIN are true and widely documented
+- A remix/collaboration is NOT a "cover" - only use "cover" for actual cover versions
+- Skip songs you don't have reliable information about
 
-VARIETY RULES:
-- Do NOT use chart_position for more than 30% of questions
-- Prioritise film_appearance, award, songwriter, and cover questions - these are more interesting!
-- If a song was in a famous film/TV show, ALWAYS ask about that instead of chart position
+GOOD QUESTION TYPES:
+- film_appearance: Iconic film/TV placements (e.g. "Bohemian Rhapsody" in Wayne's World, "Tiny Dancer" in Almost Famous)
+- award: Grammy wins, Brit Awards, or other major awards
+- songwriter: Famous songwriters like Max Martin, Diane Warren, Burt Bacharach
+- year: Release years or years songs reached #1
+- cover: ONLY for famous covers where the original artist is well-known (e.g. "I Will Always Love You" originally by Dolly Parton)
 
-STRICT RULES:
-- The correct answer MUST be 100% verifiable (cite Wikipedia, Billboard, Grammy.com)
-- Wrong answers should be PLAUSIBLE but clearly wrong (same category - other films, other artists, other awards)
-- Keep questions concise and fun
-- If you can't make a good question for a song, return an empty array
-- Make wrong answers believable - they should make players think!
+AVOID:
+- Obscure studio/recording facts
+- Chart positions unless it was a definite #1 hit
+- Anything you're not confident about
+
+QUESTION FORMAT:
+- Keep questions clear and concise
+- Wrong answers should be plausible but clearly incorrect
+- Include source (Wikipedia, Billboard, Grammy.com)
 
 Songs:
 ${trackList}
 
-Return ONLY valid JSON (no markdown):
+Return ONLY valid JSON (no markdown). Example format:
 {
   "1": [
     {
@@ -102,15 +102,7 @@ Return ONLY valid JSON (no markdown):
     }
   ],
   "2": [],
-  "3": [
-    {
-      "question_type": "cover",
-      "question": "Who originally recorded 'Song Name' before Artist?",
-      "correct_answer": "Original Artist",
-      "wrong_answers": ["Wrong Artist 1", "Wrong Artist 2", "Wrong Artist 3"],
-      "source": "Wikipedia"
-    }
-  ]
+  "3": []
 }`
 
     const response = await fetch(
