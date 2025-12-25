@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { TriviaFact, TriviaFactType } from '@/types/database'
 
 interface TrackInput {
@@ -145,16 +145,28 @@ Return ONLY valid JSON (no markdown):
     // Parse the JSON response
     let factsMap: Record<string, RawTriviaFact[]>
     try {
-      // Clean up potential markdown formatting
-      const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      // Clean up potential markdown formatting and fix common JSON issues
+      let cleanText = text
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim()
+
+      // Fix common Gemini JSON issues:
+      // 1. Replace invalid escape sequences (e.g., \' which should be ')
+      cleanText = cleanText.replace(/\\'/g, "'")
+      // 2. Replace smart quotes with regular quotes
+      cleanText = cleanText.replace(/[\u2018\u2019]/g, "'")
+      cleanText = cleanText.replace(/[\u201C\u201D]/g, '"')
+
       factsMap = JSON.parse(cleanText)
     } catch (parseError) {
       console.error('Failed to parse Gemini response:', text.slice(0, 500))
+      console.error('Parse error:', parseError)
       return NextResponse.json({ success: true, factsGenerated: 0, error: 'Parse error' })
     }
 
     // Validate and store the facts
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     let factsGenerated = 0
 
     for (let i = 0; i < tracks.length; i++) {
@@ -188,15 +200,19 @@ Return ONLY valid JSON (no markdown):
       if (validFacts.length === 0) continue
 
       // Update the submission with the facts
-      const { error: updateError } = await supabase
+      const { error: updateError, data: updateData } = await supabase
         .from('submissions')
         .update({ trivia_facts: validFacts })
         .eq('participant_id', participantId)
         .eq('track_id', tracks[i].id)
+        .select('id')
 
       if (updateError) {
         console.error(`Failed to update facts for track ${tracks[i].id}:`, updateError)
+      } else if (!updateData || updateData.length === 0) {
+        console.warn(`No rows updated for track ${tracks[i].id} (participant: ${participantId}) - RLS may be blocking`)
       } else {
+        console.log(`Updated ${updateData.length} submission(s) for track ${tracks[i].name}`)
         factsGenerated += validFacts.length
       }
     }
