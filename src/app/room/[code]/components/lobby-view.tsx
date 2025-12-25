@@ -11,11 +11,23 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { createClient } from '@/lib/supabase/client'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
-import type { Room, Participant, PlaylistSummary } from '@/types/database'
+import type { Room, Participant, PlaylistSummary, TriviaFact } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { useBackgroundMusic } from '@/components/background-music'
-import { Play, Pause } from 'lucide-react'
+import { Play, Pause, Eye, RefreshCw, X } from 'lucide-react'
+
+interface TriviaQuestion {
+  trackName: string
+  question: string
+  options: string[]
+}
+
+interface TriviaStatus {
+  totalSongs: number
+  songsWithTrivia: number
+  questions: TriviaQuestion[]
+}
 
 interface LobbyViewProps {
   room: Room
@@ -56,6 +68,10 @@ export function LobbyView({
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
   const [playlistSummary, setPlaylistSummary] = useState<PlaylistSummary | null>(room.playlist_summary || null)
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false)
+  const [triviaStatus, setTriviaStatus] = useState<TriviaStatus | null>(null)
+  const [isLoadingTrivia, setIsLoadingTrivia] = useState(false)
+  const [isRegeneratingTrivia, setIsRegeneratingTrivia] = useState(false)
+  const [showTriviaPreview, setShowTriviaPreview] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const backgroundWasPlayingRef = useRef(false)
   const { isPlaying: isBackgroundPlaying, stop: stopBackgroundMusic, play: resumeBackgroundMusic } = useBackgroundMusic()
@@ -153,6 +169,101 @@ export function LobbyView({
       setPlaylistSummary(room.playlist_summary)
     }
   }, [room.playlist_summary, playlistSummary])
+
+  // Fetch trivia status when all players have submitted (host only)
+  useEffect(() => {
+    if (!isHost || !allPlayersSubmitted || triviaStatus) return
+
+    const fetchTriviaStatus = async () => {
+      setIsLoadingTrivia(true)
+      try {
+        // Get all submissions with trivia facts for this room
+        const { data: submissions } = await supabase
+          .from('submissions')
+          .select('track_name, trivia_facts, participants!inner(room_id)')
+          .eq('participants.room_id', room.id)
+
+        if (submissions) {
+          const totalSongs = submissions.length
+          const songsWithTrivia = submissions.filter(s => s.trivia_facts && (s.trivia_facts as TriviaFact[]).length > 0).length
+
+          // Extract questions for preview (shuffled options, no correct answer marked)
+          const questions: TriviaQuestion[] = []
+          for (const sub of submissions) {
+            if (sub.trivia_facts && Array.isArray(sub.trivia_facts)) {
+              for (const fact of sub.trivia_facts as TriviaFact[]) {
+                if (fact.question && fact.correct_answer && fact.wrong_answers) {
+                  // Shuffle options
+                  const options = [fact.correct_answer, ...fact.wrong_answers]
+                    .sort(() => Math.random() - 0.5)
+                  questions.push({
+                    trackName: sub.track_name,
+                    question: fact.question,
+                    options,
+                  })
+                }
+              }
+            }
+          }
+
+          setTriviaStatus({ totalSongs, songsWithTrivia, questions })
+        }
+      } catch (error) {
+        console.error('Failed to fetch trivia status:', error)
+      } finally {
+        setIsLoadingTrivia(false)
+      }
+    }
+
+    fetchTriviaStatus()
+  }, [isHost, allPlayersSubmitted, triviaStatus, room.id, supabase])
+
+  // Regenerate trivia for all submissions
+  const handleRegenerateTrivia = async () => {
+    setIsRegeneratingTrivia(true)
+    try {
+      // Get all participants and their submissions
+      const { data: allSubmissions } = await supabase
+        .from('submissions')
+        .select('id, track_id, track_name, artist_name, release_year, participant_id, participants!inner(room_id)')
+        .eq('participants.room_id', room.id)
+
+      if (!allSubmissions) return
+
+      // Group by participant
+      const byParticipant = new Map<string, typeof allSubmissions>()
+      for (const sub of allSubmissions) {
+        if (!byParticipant.has(sub.participant_id)) {
+          byParticipant.set(sub.participant_id, [])
+        }
+        byParticipant.get(sub.participant_id)!.push(sub)
+      }
+
+      // Regenerate for each participant
+      for (const [participantId, subs] of byParticipant) {
+        await fetch('/api/trivia/generate-facts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tracks: subs.map(s => ({
+              id: s.track_id,
+              name: s.track_name,
+              artist: s.artist_name,
+              releaseYear: s.release_year,
+            })),
+            participantId,
+          }),
+        })
+      }
+
+      // Refresh status
+      setTriviaStatus(null) // This will trigger a re-fetch
+    } catch (error) {
+      console.error('Failed to regenerate trivia:', error)
+    } finally {
+      setIsRegeneratingTrivia(false)
+    }
+  }
 
   const handleRemoveParticipant = async (participantId: string) => {
     if (!onRemoveParticipant) return
@@ -744,6 +855,76 @@ Join: ${url}`
               </Card>
             )}
 
+            {/* Trivia Status Card - shown to host when trivia is enabled and all players submitted */}
+            {isHost && settings.triviaEnabled && allPlayersSubmitted && (
+              <Card className="border-2 border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-orange-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <span>🎯</span>
+                    <span>Trivia Questions</span>
+                    {triviaStatus && (
+                      <Badge
+                        variant={triviaStatus.songsWithTrivia > 0 ? 'default' : 'secondary'}
+                        className="ml-auto text-xs"
+                      >
+                        {triviaStatus.questions.length} ready
+                      </Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {isLoadingTrivia ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-pulse text-muted-foreground">
+                        Loading trivia status...
+                      </div>
+                    </div>
+                  ) : triviaStatus ? (
+                    <>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">AI questions generated</span>
+                          <span className="font-medium">
+                            {triviaStatus.songsWithTrivia} / {triviaStatus.totalSongs} songs
+                          </span>
+                        </div>
+                        <Progress
+                          value={(triviaStatus.songsWithTrivia / triviaStatus.totalSongs) * 100}
+                          className="h-2"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          + data-driven questions (release years, popularity, etc.)
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setShowTriviaPreview(true)}
+                          disabled={triviaStatus.questions.length === 0}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Preview
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={handleRegenerateTrivia}
+                          disabled={isRegeneratingTrivia}
+                        >
+                          <RefreshCw className={`w-4 h-4 mr-1 ${isRegeneratingTrivia ? 'animate-spin' : ''}`} />
+                          {isRegeneratingTrivia ? 'Generating...' : 'Regenerate'}
+                        </Button>
+                      </div>
+                    </>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Spacer to push Start Quiz to bottom on desktop */}
             <div className="hidden lg:flex lg:flex-grow" />
 
@@ -776,6 +957,55 @@ Join: ${url}`
           </div>
         </div>
       </div>
+
+      {/* Trivia Preview Modal */}
+      {showTriviaPreview && triviaStatus && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-card border rounded-lg shadow-lg max-w-lg w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Trivia Preview</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowTriviaPreview(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="overflow-y-auto p-4 space-y-4">
+              {triviaStatus.questions.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  No AI-generated questions yet. Try regenerating.
+                </p>
+              ) : (
+                triviaStatus.questions.map((q, index) => (
+                  <div key={index} className="border rounded-lg p-3 space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      Re: {q.trackName}
+                    </p>
+                    <p className="font-medium text-sm">{q.question}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {q.options.map((opt, i) => (
+                        <div
+                          key={i}
+                          className="text-xs bg-muted/50 rounded px-2 py-1.5"
+                        >
+                          {String.fromCharCode(65 + i)}) {opt}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="p-4 border-t text-center">
+              <p className="text-xs text-muted-foreground">
+                Correct answers are hidden. Good luck!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
