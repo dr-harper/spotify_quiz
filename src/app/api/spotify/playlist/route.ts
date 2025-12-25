@@ -120,11 +120,59 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Generate and upload custom cover image
+    let coverGenerated = false
+    let coverImage: string | null = null
+    try {
+      const coverResponse = await fetch(new URL('/api/spotify/generate-cover', request.url).toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tracks: orderedSubmissions.map(s => ({
+            name: s.track_name,
+            artist: s.artist_name,
+          })),
+          playlistName: playlistName || 'Festive Frequencies',
+        }),
+      })
+
+      const coverData = await coverResponse.json()
+
+      if (coverData.success && coverData.image) {
+        coverImage = coverData.image // Save for response
+
+        // Upload cover to Spotify
+        const uploadResponse = await fetch(
+          `https://api.spotify.com/v1/playlists/${playlist.id}/images`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${spotifyToken}`,
+              'Content-Type': 'image/jpeg',
+            },
+            body: coverData.image, // base64 encoded JPEG
+          }
+        )
+
+        if (uploadResponse.ok) {
+          console.log('Successfully uploaded custom playlist cover')
+          coverGenerated = true
+        } else {
+          console.warn('Failed to upload cover to Spotify:', uploadResponse.status)
+        }
+      }
+    } catch (coverError) {
+      console.warn('Cover generation failed:', coverError)
+      // Continue without custom cover - Spotify will use default
+    }
+
     return NextResponse.json({
       success: true,
       playlistUrl: playlist.external_urls.spotify,
       playlistId: playlist.id,
       trackCount: orderedSubmissions.length,
+      coverGenerated,
+      coverImage, // Return the cover image for display in the app
     })
   } catch (error) {
     console.error('Playlist creation error:', error)

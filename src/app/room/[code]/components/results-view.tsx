@@ -66,6 +66,8 @@ export function ResultsView({
   const [allSubmissions, setAllSubmissions] = useState<SubmissionWithParticipant[]>([])
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false)
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null)
+  const [coverImage, setCoverImage] = useState<string | null>(null)
+  const [coverRevealed, setCoverRevealed] = useState(false)
   const [showAnswers, setShowAnswers] = useState(false)
   const [hasSpotify, setHasSpotify] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -238,13 +240,14 @@ export function ResultsView({
 
   const handleCreatePlaylist = async () => {
     setIsCreatingPlaylist(true)
+    setCoverRevealed(false)
     try {
       const response = await fetch('/api/spotify/playlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roomId: room.id,
-          playlistName: `Festive Frequencies - ${room.room_code}`,
+          playlistName: `Festive Frequencies - ${room.name || room.room_code}`,
         }),
       })
 
@@ -252,6 +255,11 @@ export function ResultsView({
 
       if (data.success) {
         setPlaylistUrl(data.playlistUrl)
+        if (data.coverImage) {
+          setCoverImage(data.coverImage)
+          // Trigger reveal animation after a brief delay
+          setTimeout(() => setCoverRevealed(true), 100)
+        }
       } else {
         alert(data.error || 'Failed to create playlist')
       }
@@ -477,8 +485,33 @@ export function ResultsView({
             {/* Create Playlist */}
             <Card className="border-2 border-accent/30">
               <CardContent className="pt-6">
-                {playlistUrl ? (
-                  <div className="text-center space-y-3">
+                {isCreatingPlaylist ? (
+                  <div className="text-center space-y-4 py-4">
+                    <div className="relative w-32 h-32 mx-auto">
+                      <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-primary/20 via-secondary/20 to-accent/20 animate-pulse" />
+                      <div className="absolute inset-2 rounded bg-card flex items-center justify-center">
+                        <span className="text-4xl animate-bounce">🎨</span>
+                      </div>
+                    </div>
+                    <p className="text-muted-foreground animate-pulse">
+                      Creating your cover art...
+                    </p>
+                  </div>
+                ) : playlistUrl ? (
+                  <div className="text-center space-y-4">
+                    {coverImage && (
+                      <div className="relative">
+                        <img
+                          src={`data:image/png;base64,${coverImage}`}
+                          alt="Playlist cover"
+                          className={`w-full max-w-[200px] mx-auto rounded-lg shadow-lg transition-all duration-700 ${
+                            coverRevealed
+                              ? 'opacity-100 scale-100'
+                              : 'opacity-0 scale-95'
+                          }`}
+                        />
+                      </div>
+                    )}
                     <p className="text-accent font-semibold">Playlist created!</p>
                     <Button
                       asChild
@@ -496,7 +529,7 @@ export function ResultsView({
                     variant="secondary"
                     className="w-full h-12"
                   >
-                    {isCreatingPlaylist ? 'Creating Playlist...' : 'Save All Songs to Spotify Playlist'}
+                    Save All Songs to Spotify Playlist
                   </Button>
                 ) : (
                   <p className="text-center text-sm text-muted-foreground py-2">
