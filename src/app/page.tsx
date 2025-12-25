@@ -305,10 +305,10 @@ function HomeContent() {
         Made with festive cheer 🎄
       </footer>
 
-      {/* Music Toggle Button */}
+      {/* Music Toggle Button - top right to match header position on other pages */}
       <button
         onClick={() => isPlaying ? stop() : play()}
-        className="fixed bottom-4 right-4 z-20 p-3 rounded-full bg-card/80 backdrop-blur-sm border border-border hover:bg-card transition-colors"
+        className="fixed top-4 right-4 z-20 p-3 rounded-full bg-card/80 backdrop-blur-sm border border-border hover:bg-card transition-colors"
         aria-label={isPlaying ? 'Mute music' : 'Play music'}
       >
         {isPlaying ? (

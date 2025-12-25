@@ -17,6 +17,8 @@ const TRACK_URLS: Record<MusicTrack, string> = {
   app: '/app-music.mp3',     // Easy breeze for in-app
 }
 
+const STORAGE_KEY = 'festive-frequencies-music-enabled'
+
 const BackgroundMusicContext = createContext<BackgroundMusicContextType>({
   isPlaying: false,
   currentTrack: 'home',
@@ -33,11 +35,34 @@ interface BackgroundMusicProviderProps {
   children: React.ReactNode
 }
 
+// Helper to safely read from localStorage
+function getMusicPreference(): boolean {
+  if (typeof window === 'undefined') return true
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    // Default to true (music on) if no preference stored
+    return stored === null ? true : stored === 'true'
+  } catch {
+    return true
+  }
+}
+
+// Helper to safely write to localStorage
+function saveMusicPreference(enabled: boolean): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(STORAGE_KEY, String(enabled))
+  } catch {
+    // Ignore storage errors (e.g., private browsing)
+  }
+}
+
 export function BackgroundMusicProvider({ children }: BackgroundMusicProviderProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTrack, setCurrentTrack] = useState<MusicTrack>('home')
-  const shouldPlayRef = useRef(true)
+  // Initialise from localStorage preference
+  const shouldPlayRef = useRef(getMusicPreference())
   const hasStartedRef = useRef(false)
 
   // Create audio element on mount
@@ -47,13 +72,16 @@ export function BackgroundMusicProvider({ children }: BackgroundMusicProviderPro
     audio.volume = 0.3
     audioRef.current = audio
 
-    // Try to play immediately (may be blocked by autoplay policy)
-    audio.play().then(() => {
-      setIsPlaying(true)
-      hasStartedRef.current = true
-    }).catch(() => {
-      // Autoplay blocked - will start on first user interaction
-    })
+    // Only try to autoplay if the user hasn't muted
+    if (shouldPlayRef.current) {
+      // Try to play immediately (may be blocked by autoplay policy)
+      audio.play().then(() => {
+        setIsPlaying(true)
+        hasStartedRef.current = true
+      }).catch(() => {
+        // Autoplay blocked - will start on first user interaction
+      })
+    }
 
     // Start music on first user interaction if autoplay was blocked
     const handleInteraction = () => {
@@ -134,6 +162,7 @@ export function BackgroundMusicProvider({ children }: BackgroundMusicProviderPro
 
   const stop = useCallback(() => {
     shouldPlayRef.current = false
+    saveMusicPreference(false)
     if (audioRef.current) {
       audioRef.current.pause()
       setIsPlaying(false)
@@ -142,6 +171,7 @@ export function BackgroundMusicProvider({ children }: BackgroundMusicProviderPro
 
   const play = useCallback(() => {
     shouldPlayRef.current = true
+    saveMusicPreference(true)
     if (audioRef.current) {
       audioRef.current.play().then(() => {
         setIsPlaying(true)
