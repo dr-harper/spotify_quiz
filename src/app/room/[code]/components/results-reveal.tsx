@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { SongRevealCard } from './song-reveal-card'
 import { Award, calculateAwards } from './award-reveal'
@@ -637,8 +638,11 @@ export function ResultsReveal({
                           </Avatar>
 
                           {/* Name */}
-                          <span className="flex-1 text-sm font-medium truncate">
+                          <span className="flex-1 text-sm font-medium truncate flex items-center gap-1">
                             {participant.display_name}
+                            {participant.is_spectator && (
+                              <span className="text-muted-foreground text-xs">👁</span>
+                            )}
                           </span>
 
                           {/* Score */}
