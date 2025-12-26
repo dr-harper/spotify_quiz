@@ -19,7 +19,7 @@ export async function POST(
 
   const { data: room, error: roomError } = await admin
     .from('rooms')
-    .select('*')
+    .select('id, host_id')
     .eq('room_code', roomCode)
     .single()
 
