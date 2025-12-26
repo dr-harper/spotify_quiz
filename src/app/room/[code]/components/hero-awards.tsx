@@ -61,16 +61,16 @@ export function HeroAwards({ awards, onComplete, onAwardRevealed }: HeroAwardsPr
   if (phase === 'intro') {
     return (
       <main className="fixed inset-0 bg-background/95 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="text-center space-y-6 animate-in fade-in zoom-in duration-500">
+        <div className="text-center space-y-6">
           <div className="text-8xl animate-bounce">🎖️</div>
           <div className="space-y-3">
-            <p className="text-2xl text-muted-foreground animate-in fade-in duration-500" style={{ animationDelay: '300ms' }}>
+            <p className="text-2xl text-muted-foreground">
               Before we crown the winner...
             </p>
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: '600ms' }}>
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
               Bonus Awards!
             </h1>
-            <p className="text-lg text-muted-foreground animate-in fade-in duration-500" style={{ animationDelay: '900ms' }}>
+            <p className="text-lg text-muted-foreground">
               A few extra points up for grabs...
             </p>
           </div>
@@ -128,25 +128,24 @@ export function HeroAwards({ awards, onComplete, onAwardRevealed }: HeroAwardsPr
           </div>
 
           {/* Recipient - revealed after delay */}
-          <div
-            className={`transition-all duration-700 ${
-              phase === 'category'
-                ? 'opacity-0 scale-75'
-                : 'opacity-100 scale-100'
-            }`}
-          >
-            <div className="flex flex-col items-center gap-3">
-              <Avatar className="h-24 w-24 ring-4 ring-primary/50 shadow-lg shadow-primary/20">
-                <AvatarImage src={currentAward.recipient.avatar_url || undefined} />
-                <AvatarFallback className="text-3xl bg-primary/20">
-                  {currentAward.recipient.display_name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-2xl font-bold">
-                {currentAward.recipient.display_name}
-              </span>
+          {(phase === 'recipient' || phase === 'points') && (
+            <div
+              key={`recipient-${currentIndex}`}
+              className="animate-in fade-in zoom-in duration-500"
+            >
+              <div className="flex flex-col items-center gap-3">
+                <Avatar className="h-24 w-24 ring-4 ring-primary/50 shadow-lg shadow-primary/20">
+                  <AvatarImage src={currentAward.recipient.avatar_url || undefined} />
+                  <AvatarFallback className="text-3xl bg-primary/20">
+                    {currentAward.recipient.display_name.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-2xl font-bold">
+                  {currentAward.recipient.display_name}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Points - revealed last */}
           {phase === 'points' && (
