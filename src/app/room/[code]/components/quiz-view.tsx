@@ -555,7 +555,10 @@ export function QuizView({
                 <p className="text-sm text-muted-foreground">
                   You declared <strong>{participants.find(p => p.id === selectedParticipant)?.display_name || 'your target'}</strong> as your imitation target.
                 </p>
-                <p className="text-sm">
+                <Badge variant="outline" className="text-sm px-3 py-1">
+                  {roundVoters.size}/{submittedParticipants.length} voted
+                </Badge>
+                <p className="text-sm text-muted-foreground">
                   Waiting for others to guess...
                 </p>
                 {isHost && (
@@ -575,6 +578,18 @@ export function QuizView({
               </div>
             ) : (
               <>
+                {/* Vote confirmation */}
+                {hasVoted && selectedParticipant && (
+                  <div className="text-center mb-3 space-y-2">
+                    <p className="text-sm">
+                      You guessed <strong className="text-primary">{submittedParticipants.find(p => p.id === selectedParticipant)?.display_name}</strong>
+                    </p>
+                    <Badge variant="outline" className="text-sm px-3 py-1">
+                      {roundVoters.size}/{submittedParticipants.length} voted
+                    </Badge>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   {submittedParticipants.map((participant) => (
                     <Button
@@ -593,8 +608,8 @@ export function QuizView({
                   ))}
                 </div>
 
-                {waitingForOthers && !isHost && (
-                  <p className="text-center text-muted-foreground mt-4">
+                {waitingForOthers && !isHost && !hasVoted && (
+                  <p className="text-center text-muted-foreground text-sm mt-4">
                     Waiting for host to continue...
                   </p>
                 )}
