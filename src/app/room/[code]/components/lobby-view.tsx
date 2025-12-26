@@ -15,7 +15,7 @@ import type { Room, Participant, PlaylistSummary, TriviaFact } from '@/types/dat
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { useBackgroundMusic } from '@/components/background-music'
-import { Play, Pause, Eye, RefreshCw, X, User, UserMinus } from 'lucide-react'
+import { Play, Pause, Eye, EyeOff, RefreshCw, X } from 'lucide-react'
 
 interface TriviaQuestion {
   trackName: string
@@ -549,19 +549,28 @@ Join: ${url}`
                         <>
                           {/* Toggle spectator button */}
                           <Button
-                            variant="ghost"
+                            variant={participant.is_spectator ? 'default' : 'outline'}
                             size="sm"
-                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                            className={`h-6 px-2 text-xs ${
+                              participant.is_spectator
+                                ? 'bg-muted text-muted-foreground hover:bg-muted/80'
+                                : 'text-muted-foreground'
+                            }`}
                             onClick={() => toggleSpectator(participant.id, !participant.is_spectator)}
                             disabled={togglingSpectatorId === participant.id}
-                            title={participant.is_spectator ? 'Make player' : 'Make spectator'}
                           >
                             {togglingSpectatorId === participant.id ? (
-                              <span className="animate-spin text-xs">⏳</span>
+                              <span className="animate-spin">⏳</span>
                             ) : participant.is_spectator ? (
-                              <User className="w-4 h-4" />
+                              <>
+                                <Eye className="w-3 h-3 mr-1" />
+                                Spectator
+                              </>
                             ) : (
-                              <UserMinus className="w-4 h-4" />
+                              <>
+                                <EyeOff className="w-3 h-3 mr-1" />
+                                Spectate
+                              </>
                             )}
                           </Button>
                           {/* Remove button */}
