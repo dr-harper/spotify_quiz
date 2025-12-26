@@ -6,16 +6,22 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import type { Participant, Submission } from '@/types/database'
 
+interface VoterGuess {
+  guessedParticipant: Participant | null
+  isCorrect: boolean
+}
+
 interface SongRevealCardProps {
   submission: Submission
   pickedBy: Participant
   correctVoters: Participant[]
+  allGuesses?: Map<string, VoterGuess>  // All votes for this round
   roundNumber: number
   totalRounds: number
   phase: 'part1' | 'part2'
   onAudioEnd?: () => void
   chameleonResult?: { points: number; matchCount: number; caughtCount: number; declaredTargetId: string | null } | null
-  participants?: Participant[]  // Needed to show target name
+  participants?: Participant[]  // Needed to show target name and all guesses
 }
 
 const PLAYER_COLOURS = [
@@ -27,6 +33,7 @@ export function SongRevealCard({
   submission,
   pickedBy,
   correctVoters,
+  allGuesses,
   roundNumber,
   totalRounds,
   phase,
@@ -180,41 +187,90 @@ export function SongRevealCard({
           </div>
         )}
 
-        {/* Correct Guessers */}
+        {/* All Guesses */}
         <div className="mt-4 pt-4 border-t">
-          {correctVoters.length > 0 ? (
-            <div className="space-y-2">
-              <span className="text-sm text-muted-foreground">Correct guesses:</span>
-              <div className="flex flex-wrap gap-2">
-                {correctVoters.map((voter, index) => (
-                  <div
-                    key={voter.id}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium animate-in fade-in zoom-in duration-300"
-                    style={{
-                      backgroundColor: `${PLAYER_COLOURS[index % PLAYER_COLOURS.length]}20`,
-                      color: PLAYER_COLOURS[index % PLAYER_COLOURS.length],
-                      animationDelay: `${index * 100}ms`,
-                    }}
-                  >
-                    <Avatar className="h-5 w-5">
-                      <AvatarImage src={voter.avatar_url || undefined} />
-                      <AvatarFallback className="text-[10px]">
-                        {voter.display_name.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span>{voter.display_name}</span>
-                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                      +100
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">
-              Nobody guessed correctly! 🎭
-            </p>
-          )}
+          <span className="text-sm text-muted-foreground">Guesses:</span>
+          <div className="mt-2 space-y-1.5">
+            {participants && allGuesses ? (
+              // Show all guesses with who each person picked
+              participants
+                .filter(p => p.id !== pickedBy.id) // Don't show the song owner
+                .map((voter, index) => {
+                  const guess = allGuesses.get(voter.id)
+                  const guessedName = guess?.guessedParticipant?.display_name || '—'
+                  const isCorrect = guess?.isCorrect || false
+                  const voterColourIndex = participants.findIndex(p => p.id === voter.id)
+
+                  return (
+                    <div
+                      key={voter.id}
+                      className="flex items-center gap-2 text-sm animate-in fade-in duration-300"
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      {/* Voter */}
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <div
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: PLAYER_COLOURS[voterColourIndex % PLAYER_COLOURS.length] }}
+                        />
+                        <Avatar className="h-5 w-5 flex-shrink-0">
+                          <AvatarImage src={voter.avatar_url || undefined} />
+                          <AvatarFallback className="text-[10px]">
+                            {voter.display_name.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="truncate text-muted-foreground">{voter.display_name}</span>
+                      </div>
+
+                      {/* Arrow */}
+                      <span className="text-muted-foreground/50">→</span>
+
+                      {/* Their guess */}
+                      <div className={`flex items-center gap-1.5 ${isCorrect ? 'text-green-500' : 'text-red-400'}`}>
+                        <span className="font-medium">{guessedName}</span>
+                        {isCorrect && (
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-green-500/20 text-green-500">
+                            +100
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+            ) : (
+              // Fallback to old display if allGuesses not provided
+              correctVoters.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {correctVoters.map((voter, index) => (
+                    <div
+                      key={voter.id}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium animate-in fade-in zoom-in duration-300"
+                      style={{
+                        backgroundColor: `${PLAYER_COLOURS[index % PLAYER_COLOURS.length]}20`,
+                        color: PLAYER_COLOURS[index % PLAYER_COLOURS.length],
+                        animationDelay: `${index * 100}ms`,
+                      }}
+                    >
+                      <Avatar className="h-5 w-5">
+                        <AvatarImage src={voter.avatar_url || undefined} />
+                        <AvatarFallback className="text-[10px]">
+                          {voter.display_name.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>{voter.display_name}</span>
+                      <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                        +100
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  Nobody guessed correctly! 🎭
+                </p>
+              )
+            )}
+          </div>
         </div>
 
         {/* Hidden Audio Element */}

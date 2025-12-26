@@ -20,11 +20,17 @@ interface ChameleonVotes {
   targetVoterIds: string[]         // IDs of other voters who also voted for target
 }
 
+interface VoterGuess {
+  guessedParticipant: Participant | null
+  isCorrect: boolean
+}
+
 interface RoundDetail {
   roundNumber: number
   submission: Submission
   correctParticipant: Participant
   correctVoters: Participant[]
+  allGuesses: Map<string, VoterGuess>  // participantId -> their guess
   chameleonVotes?: ChameleonVotes  // Only present for chameleon songs
 }
 
@@ -254,6 +260,7 @@ export function ResultsReveal({
           submission={round.submission}
           pickedBy={round.correctParticipant}
           correctVoters={round.correctVoters}
+          allGuesses={round.allGuesses}
           roundNumber={currentIndex + 1}
           totalRounds={part1Rounds.length}
           phase="part1"
@@ -304,6 +311,7 @@ export function ResultsReveal({
           submission={round.submission}
           pickedBy={round.correctParticipant}
           correctVoters={round.correctVoters}
+          allGuesses={round.allGuesses}
           roundNumber={currentIndex + 1}
           totalRounds={part2Rounds.length}
           phase="part2"

@@ -43,11 +43,17 @@ interface ChameleonVotes {
   targetVoterIds: string[]         // IDs of other voters who also voted for target
 }
 
+interface VoterGuess {
+  guessedParticipant: Participant | null
+  isCorrect: boolean
+}
+
 interface RoundDetail {
   roundNumber: number
   submission: Submission
   correctParticipant: Participant
   correctVoters: Participant[]
+  allGuesses: Map<string, VoterGuess>  // participantId -> their guess
   chameleonVotes?: ChameleonVotes  // Only present for chameleon songs
 }
 
@@ -161,6 +167,20 @@ export function ResultsView({
           const correctParticipant = participants.find(p => p.id === submission.participant_id)!
           const correctVoters = participants.filter(p => correctVoterIds.includes(p.id))
 
+          // Build allGuesses map
+          const allGuesses = new Map<string, VoterGuess>()
+          participants.forEach(p => {
+            const vote = roundVotes.find(v => v.voter_id === p.id)
+            if (vote) {
+              const guessedParticipant = vote.guessed_participant_id
+                ? participants.find(gp => gp.id === vote.guessed_participant_id) || null
+                : null
+              allGuesses.set(p.id, { guessedParticipant, isCorrect: vote.is_correct === true })
+            } else {
+              allGuesses.set(p.id, { guessedParticipant: null, isCorrect: false })
+            }
+          })
+
           // Build chameleon votes info if this is a chameleon song
           let chameleonVotes: ChameleonVotes | undefined
           if (submission.is_chameleon) {
@@ -190,6 +210,7 @@ export function ResultsView({
             submission,
             correctParticipant,
             correctVoters,
+            allGuesses,
             chameleonVotes,
           })
         })
