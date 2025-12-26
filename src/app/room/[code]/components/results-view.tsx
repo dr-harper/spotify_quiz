@@ -70,6 +70,7 @@ export function ResultsView({
   const [triviaScores, setTriviaScores] = useState<Record<string, number>>({})
   const [favouriteScores, setFavouriteScores] = useState<Record<string, number>>({})
   const [favouriteVoteCounts, setFavouriteVoteCounts] = useState<Record<string, number>>({})
+  const [favouriteVotesBySubmission, setFavouriteVotesBySubmission] = useState<Record<string, number>>({})
   const [finalScores, setFinalScores] = useState<Participant[]>([])
   const [roundResults, setRoundResults] = useState<RoundResult[]>([])
   const [allSubmissions, setAllSubmissions] = useState<SubmissionWithParticipant[]>([])
@@ -151,12 +152,17 @@ export function ResultsView({
 
       const favouriteScoreMap: Record<string, number> = {}
       const favouriteVoteCountMap: Record<string, number> = {}
+      const favouriteVotesBySubmissionMap: Record<string, number> = {}
       participants.forEach(p => {
         favouriteScoreMap[p.id] = 0
         favouriteVoteCountMap[p.id] = 0
       })
       if (favouriteVotes && submissionsData) {
         favouriteVotes.forEach(vote => {
+          // Track votes by submission
+          favouriteVotesBySubmissionMap[vote.submission_id] =
+            (favouriteVotesBySubmissionMap[vote.submission_id] || 0) + 1
+
           const submission = submissionsData.find(s => s.id === vote.submission_id)
           if (submission) {
             favouriteScoreMap[submission.participant_id] =
@@ -168,6 +174,7 @@ export function ResultsView({
       }
       setFavouriteScores(favouriteScoreMap)
       setFavouriteVoteCounts(favouriteVoteCountMap)
+      setFavouriteVotesBySubmission(favouriteVotesBySubmissionMap)
 
       if (quizRounds && quizRounds.length > 0) {
         // Fetch all votes for the room's rounds
@@ -479,6 +486,8 @@ export function ResultsView({
         currentParticipant={currentParticipant}
         roundResults={roundResults}
         allSubmissions={allSubmissions}
+        favouriteVotesByPerson={favouriteVoteCounts}
+        favouriteVotesBySubmission={favouriteVotesBySubmission}
         onClose={() => setPhase('results')}
       />
     )

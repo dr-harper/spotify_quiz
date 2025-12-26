@@ -27,6 +27,8 @@ interface StatsViewProps {
   currentParticipant: Participant
   roundResults: RoundResult[]
   allSubmissions: SubmissionWithParticipant[]
+  favouriteVotesByPerson: Record<string, number>
+  favouriteVotesBySubmission: Record<string, number>
   onClose: () => void
 }
 
@@ -40,6 +42,8 @@ export function StatsView({
   currentParticipant,
   roundResults,
   allSubmissions,
+  favouriteVotesByPerson,
+  favouriteVotesBySubmission,
   onClose,
 }: StatsViewProps) {
   // Calculate all statistics
@@ -210,6 +214,28 @@ export function StatsView({
     const mostSurprising = [...songGuessRates].sort((a, b) => a.guessRate - b.guessRate).slice(0, 3)
     const mostObvious = [...songGuessRates].sort((a, b) => b.guessRate - a.guessRate).slice(0, 3)
 
+    // Favourite votes by song - ranked list
+    const favouriteSongRanking = allSubmissions
+      .map(sub => ({
+        submission: sub,
+        owner: sub.participant,
+        votes: favouriteVotesBySubmission[sub.id] || 0,
+      }))
+      .filter(item => item.votes > 0)
+      .sort((a, b) => b.votes - a.votes)
+
+    // Favourite votes by person - ranked list
+    const favouritePersonRanking = participants
+      .map(p => ({
+        participant: p,
+        votes: favouriteVotesByPerson[p.id] || 0,
+        isCurrentUser: p.id === currentParticipant.id,
+      }))
+      .sort((a, b) => b.votes - a.votes)
+
+    // Check if there are any favourite votes
+    const hasFavouriteVotes = Object.values(favouriteVotesBySubmission).some(v => v > 0)
+
     return {
       myAccuracyData,
       hardToGuessData,
@@ -220,8 +246,11 @@ export function StatsView({
       songGuessChartData,
       mostSurprising,
       mostObvious,
+      favouriteSongRanking,
+      favouritePersonRanking,
+      hasFavouriteVotes,
     }
-  }, [participants, currentParticipant, roundResults, allSubmissions])
+  }, [participants, currentParticipant, roundResults, allSubmissions, favouriteVotesByPerson, favouriteVotesBySubmission])
 
   return (
     <main className="flex min-h-screen flex-col items-center p-4 py-8">
@@ -514,6 +543,83 @@ export function StatsView({
             </CardContent>
           </Card>
         </div>
+
+        {/* Favourite Votes Section */}
+        {stats.hasFavouriteVotes && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Most Loved Songs */}
+            <Card className="border-yellow-500/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">⭐ Most Loved Songs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {stats.favouriteSongRanking.slice(0, 5).map((item, index) => (
+                    <div key={item.submission.id} className="flex items-center gap-3">
+                      <span className="text-lg w-6">
+                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
+                      </span>
+                      {item.submission.album_art_url && (
+                        <img
+                          src={item.submission.album_art_url}
+                          alt=""
+                          className="w-10 h-10 rounded"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none'
+                          }}
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{item.submission.track_name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {item.owner.display_name}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold text-yellow-500">{item.votes} votes</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Votes Received by Person */}
+            <Card className="border-yellow-500/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">👑 Crowd Pleasers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {stats.favouritePersonRanking.map((item, index) => (
+                    <div key={item.participant.id} className="flex items-center gap-3">
+                      <span className="text-lg w-6">
+                        {index === 0 ? '👑' : ''}
+                      </span>
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={item.participant.avatar_url || undefined} />
+                        <AvatarFallback>{item.participant.display_name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-medium text-sm truncate ${item.isCurrentUser ? 'text-primary' : ''}`}>
+                          {item.participant.display_name} {item.isCurrentUser && '(You)'}
+                        </p>
+                        <div className="w-full bg-muted rounded-full h-2 mt-1">
+                          <div
+                            className="bg-yellow-500 h-2 rounded-full transition-all"
+                            style={{ width: `${(item.votes / Math.max(...stats.favouritePersonRanking.map(p => p.votes), 1)) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-yellow-500">{item.votes}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-3 text-center">
+                  Total votes received for all songs
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <Button variant="outline" onClick={onClose} className="w-full">
           Back to Results

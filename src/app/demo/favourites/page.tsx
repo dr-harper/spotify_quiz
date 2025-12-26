@@ -14,90 +14,110 @@ import { Check } from 'lucide-react'
  * Access at /demo/favourites
  */
 
-// Mock submissions data
+// Festive colours for placeholder album art
+const ALBUM_COLOURS = [
+  '#c41e3a', // Christmas red
+  '#165b33', // Christmas green
+  '#bb8e35', // Gold
+  '#4a6fa5', // Winter blue
+  '#7b3f61', // Plum
+  '#2d5a27', // Forest green
+  '#8b0000', // Dark red
+  '#1e4d2b', // Pine green
+]
+
+// Generate a simple SVG placeholder with a colour based on the ID
+const getPlaceholderAlbumArt = (id: string): string => {
+  const hash = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+  const colour = ALBUM_COLOURS[hash % ALBUM_COLOURS.length]
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect fill="${colour}" width="300" height="300"/><circle cx="150" cy="150" r="80" fill="${colour}" stroke="rgba(255,255,255,0.3)" stroke-width="4"/><circle cx="150" cy="150" r="25" fill="rgba(0,0,0,0.3)"/></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
+// Mock submissions data - using SVG placeholders for reliable rendering
 const MOCK_SUBMISSIONS = [
   {
     id: '1',
     track_name: 'All I Want for Christmas Is You',
     artist_name: 'Mariah Carey',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273f6e57d1a60b5dc1e28e49522',
+    album_art_url: getPlaceholderAlbumArt('1'),
     participant_id: 'other1',
   },
   {
     id: '2',
     track_name: 'Last Christmas',
     artist_name: 'Wham!',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b2732e3c95b3111eb79224c4e6ea',
+    album_art_url: getPlaceholderAlbumArt('2'),
     participant_id: 'other2',
   },
   {
     id: '3',
-    track_name: 'Rockin\' Around the Christmas Tree',
+    track_name: "Rockin' Around the Christmas Tree",
     artist_name: 'Brenda Lee',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273b8e8c9cce52f7ae3c2f9d051',
+    album_art_url: getPlaceholderAlbumArt('3'),
     participant_id: 'other3',
   },
   {
     id: '4',
     track_name: 'Jingle Bell Rock',
     artist_name: 'Bobby Helms',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273f8ca9e64b4200a6e8e7eb22f',
+    album_art_url: getPlaceholderAlbumArt('4'),
     participant_id: 'other1',
   },
   {
     id: '5',
-    track_name: 'It\'s Beginning to Look a Lot Like Christmas',
+    track_name: "It's Beginning to Look a Lot Like Christmas",
     artist_name: 'Michael Bublé',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273119e4094f07a8123b471ac1d',
+    album_art_url: getPlaceholderAlbumArt('5'),
     participant_id: 'other2',
   },
   {
     id: '6',
     track_name: 'Santa Tell Me',
     artist_name: 'Ariana Grande',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273c35f98a910fd5c5e5a841a7f',
+    album_art_url: getPlaceholderAlbumArt('6'),
     participant_id: 'other3',
   },
   {
     id: '7',
     track_name: 'Underneath the Tree',
     artist_name: 'Kelly Clarkson',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273d98e4e9a7f9e2c6ef5f31fcb',
+    album_art_url: getPlaceholderAlbumArt('7'),
     participant_id: 'me', // This is the current user's song - should be filtered out
   },
   {
     id: '8',
     track_name: 'White Christmas',
     artist_name: 'Bing Crosby',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b2736ae75d9917d9c7e5f9e3d4b1',
+    album_art_url: getPlaceholderAlbumArt('8'),
     participant_id: 'other1',
   },
   {
     id: '9',
     track_name: 'Snowman',
     artist_name: 'Sia',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273dc1a79de9b78a3c4f79b5c87',
+    album_art_url: getPlaceholderAlbumArt('9'),
     participant_id: 'other2',
   },
   {
     id: '10',
     track_name: 'Let It Snow! Let It Snow! Let It Snow!',
     artist_name: 'Dean Martin',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273e3e3b64cea45a02436d2e1c8',
+    album_art_url: getPlaceholderAlbumArt('10'),
     participant_id: 'other3',
   },
   {
     id: '11',
     track_name: 'Feliz Navidad',
     artist_name: 'José Feliciano',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273fb7c8a9e8e4dc4b9a3a69c7a',
+    album_art_url: getPlaceholderAlbumArt('11'),
     participant_id: 'me', // Current user's song
   },
   {
     id: '12',
     track_name: 'Have Yourself a Merry Little Christmas',
     artist_name: 'Frank Sinatra',
-    album_art_url: 'https://i.scdn.co/image/ab67616d0000b273d9ae4c5ab5a44f0b9c9e5d3e',
+    album_art_url: getPlaceholderAlbumArt('12'),
     participant_id: 'other1',
   },
 ]

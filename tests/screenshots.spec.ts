@@ -121,4 +121,80 @@ test.describe('Demo Page Screenshots', () => {
       fullPage: false,
     })
   })
+
+  test('Quiz Intro Page - Desktop', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'Desktop Chrome') {
+      test.skip()
+      return
+    }
+
+    await page.goto('/demo/intro')
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(500)
+    await removeNextJsIndicators(page)
+    // Hide demo controls for clean screenshot
+    await page.evaluate(() => {
+      document.querySelector('.fixed.top-4.left-4')?.remove()
+    })
+
+    await page.screenshot({
+      path: path.join(screenshotsDir, 'intro-desktop.png'),
+      fullPage: false,
+    })
+  })
+
+  test('Quiz Intro Page - Mobile', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'Mobile Safari') {
+      test.skip()
+      return
+    }
+
+    await page.goto('/demo/intro')
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(500)
+    await removeNextJsIndicators(page)
+    // Hide demo controls for clean screenshot
+    await page.evaluate(() => {
+      document.querySelector('.fixed.top-4.left-4')?.remove()
+    })
+
+    await page.screenshot({
+      path: path.join(screenshotsDir, 'intro-mobile.png'),
+      fullPage: false,
+    })
+  })
+
+  test('Favourites Page - Desktop', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'Desktop Chrome') {
+      test.skip()
+      return
+    }
+
+    await page.goto('/demo/favourites')
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(500)
+    await removeNextJsIndicators(page)
+
+    await page.screenshot({
+      path: path.join(screenshotsDir, 'favourites-desktop.png'),
+      fullPage: false,
+    })
+  })
+
+  test('Favourites Page - Mobile', async ({ page }, testInfo) => {
+    if (testInfo.project.name !== 'Mobile Safari') {
+      test.skip()
+      return
+    }
+
+    await page.goto('/demo/favourites')
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(500)
+    await removeNextJsIndicators(page)
+
+    await page.screenshot({
+      path: path.join(screenshotsDir, 'favourites-mobile.png'),
+      fullPage: false,
+    })
+  })
 })

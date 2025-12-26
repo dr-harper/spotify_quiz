@@ -32,7 +32,7 @@ export function QuizIntro({ settings, isHost, onStart }: QuizIntroProps) {
     {
       emoji: '🧠',
       title: 'Trivia',
-      description: 'Test your Christmas music knowledge',
+      description: 'Test your knowledge about the songs',
       enabled: gameSettings.triviaEnabled,
     },
     {
