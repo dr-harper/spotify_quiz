@@ -5,9 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
 import { SongRevealCard } from './song-reveal-card'
-import { AwardBadge, Award, calculateAwards } from './award-reveal'
+import { Award, AwardBadge, calculateAwards } from './award-reveal'
+import { HeroAwards } from './hero-awards'
 import { WinnerReveal } from './winner-reveal'
 import type { Participant, Submission } from '@/types/database'
+
+interface SubmissionWithParticipant extends Submission {
+  participant: Participant
+}
 
 interface ChameleonVotes {
   declaredTargetId: string | null  // Who the owner declared as their target
@@ -54,10 +59,11 @@ interface ResultsRevealProps {
   part1Rounds: RoundDetail[]
   part2Rounds: RoundDetail[]
   triviaScores: Record<string, number> // participantId -> trivia score
+  submissions: Submission[] // For award popularity calculations
   onComplete: () => void
 }
 
-type Phase = 'part1' | 'trivia' | 'part2' | 'winner'
+type Phase = 'part1' | 'trivia' | 'part2' | 'awards' | 'winner'
 
 const PLAYER_COLOURS = [
   '#ef4444', '#22c55e', '#3b82f6', '#f59e0b',
@@ -69,6 +75,7 @@ export function ResultsReveal({
   part1Rounds,
   part2Rounds,
   triviaScores,
+  submissions,
   onComplete,
 }: ResultsRevealProps) {
   const [phase, setPhase] = useState<Phase>('part1')
@@ -93,9 +100,14 @@ export function ResultsReveal({
 
   // Calculate awards once
   useEffect(() => {
-    const calculatedAwards = calculateAwards(participants, allRounds, triviaScores)
+    // Convert submissions to format expected by calculateAwards
+    const submissionsWithParticipantId = submissions.map(s => ({
+      participant_id: s.participant_id,
+      popularity: s.popularity,
+    }))
+    const calculatedAwards = calculateAwards(participants, allRounds, submissionsWithParticipantId)
     setAwards(calculatedAwards)
-  }, [participants, allRounds, triviaScores])
+  }, [participants, allRounds, submissions])
 
   // Pre-calculate final scores (used for skip and winner determination)
   const finalScoresCalculated = useMemo(() => {
@@ -121,13 +133,17 @@ export function ResultsReveal({
     })
 
     // Add award points
-    const calculatedAwards = calculateAwards(participants, allRounds, triviaScores)
+    const submissionsWithParticipantId = submissions.map(s => ({
+      participant_id: s.participant_id,
+      popularity: s.popularity,
+    }))
+    const calculatedAwards = calculateAwards(participants, allRounds, submissionsWithParticipantId)
     calculatedAwards.forEach(award => {
       scores[award.recipient.id] = (scores[award.recipient.id] || 0) + award.points
     })
 
     return scores
-  }, [participants, allRounds, triviaScores])
+  }, [participants, allRounds, triviaScores, submissions])
 
   // Update chart data whenever scores change
   useEffect(() => {
@@ -209,25 +225,9 @@ export function ResultsReveal({
       if (currentIndex < part2Rounds.length - 1) {
         setCurrentIndex(prev => prev + 1)
       } else {
-        // Start revealing awards, then go to winner
+        // Go to awards phase (full-screen hero reveal)
         if (awards.length > 0) {
-          // Start auto-revealing awards one by one
-          let awardIndex = 0
-          const revealInterval = setInterval(() => {
-            if (awardIndex < awards.length) {
-              const award = awards[awardIndex]
-              setLiveScores(prev => ({
-                ...prev,
-                [award.recipient.id]: (prev[award.recipient.id] || 0) + award.points,
-              }))
-              setVisibleAwards(awardIndex + 1)
-              awardIndex++
-            } else {
-              clearInterval(revealInterval)
-              // Go to winner after all awards shown
-              setTimeout(() => setPhase('winner'), 1500)
-            }
-          }, 1000)
+          setPhase('awards')
         } else {
           setPhase('winner')
         }
@@ -306,6 +306,26 @@ export function ResultsReveal({
       )
     }
 
+    if (phase === 'awards') {
+      // Full-screen hero awards reveal
+      const handleAwardRevealed = (award: Award) => {
+        // Update live scores when each award is revealed
+        setLiveScores(prev => ({
+          ...prev,
+          [award.recipient.id]: (prev[award.recipient.id] || 0) + award.points,
+        }))
+        setVisibleAwards(prev => prev + 1)
+      }
+
+      return (
+        <HeroAwards
+          awards={awards}
+          onComplete={() => setPhase('winner')}
+          onAwardRevealed={handleAwardRevealed}
+        />
+      )
+    }
+
     if (phase === 'winner') {
       // Find winner using pre-calculated final scores (stable)
       const sortedByScore = [...participants].sort(
@@ -337,7 +357,8 @@ export function ResultsReveal({
     phase === 'part1' ? currentIndex + 1 :
     phase === 'trivia' ? part1Rounds.length + 1 :
     phase === 'part2' ? part1Rounds.length + triviaSteps + currentIndex + 1 :
-    part1Rounds.length + triviaSteps + part2Rounds.length + visibleAwards + (phase === 'winner' ? 1 : 0)
+    phase === 'awards' ? part1Rounds.length + triviaSteps + part2Rounds.length + visibleAwards :
+    part1Rounds.length + triviaSteps + part2Rounds.length + awards.length + 1
 
   return (
     <div className="min-h-screen flex flex-col p-4">
@@ -436,7 +457,7 @@ export function ResultsReveal({
 
         {/* Control Buttons */}
         <div className="flex gap-2">
-          {phase !== 'winner' && phase !== 'trivia' && (
+          {phase !== 'winner' && phase !== 'trivia' && phase !== 'awards' && (
             <>
               <Button
                 variant="outline"

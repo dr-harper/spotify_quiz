@@ -326,13 +326,17 @@ export function ResultsView({
     })
 
     // Add award points
-    const awards = calculateAwards(participants, allRounds, triviaScores)
+    const submissionsWithParticipantId = allSubmissions.map(s => ({
+      participant_id: s.participant_id,
+      popularity: s.popularity,
+    }))
+    const awards = calculateAwards(participants, allRounds, submissionsWithParticipantId)
     awards.forEach(award => {
       scores[award.recipient.id] = (scores[award.recipient.id] || 0) + award.points
     })
 
     return scores
-  }, [participants, part1Rounds, part2Rounds, triviaScores])
+  }, [participants, part1Rounds, part2Rounds, triviaScores, allSubmissions])
 
   // Sort participants by calculated score
   const sortedParticipants = useMemo(() => {
@@ -381,6 +385,7 @@ export function ResultsView({
         part1Rounds={part1Rounds}
         part2Rounds={part2Rounds}
         triviaScores={triviaScores}
+        submissions={allSubmissions}
         onComplete={() => setPhase('results')}
       />
     )

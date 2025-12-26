@@ -101,6 +101,12 @@ export function AwardBadge({ award, isVisible, delay }: AwardBadgeProps) {
   )
 }
 
+// Submission with participant info for popularity calculation
+interface SubmissionWithParticipant {
+  participant_id: string
+  popularity: number | null
+}
+
 // Award calculation helpers
 export function calculateAwards(
   participants: Participant[],
@@ -108,7 +114,7 @@ export function calculateAwards(
     correctParticipant: Participant
     correctVoters: Participant[]
   }>,
-  triviaScores: Record<string, number>
+  submissions: SubmissionWithParticipant[]
 ): Award[] {
   const awards: Award[] = []
 
@@ -116,77 +122,81 @@ export function calculateAwards(
 
   // Calculate stats for each participant
   const stats = participants.map(p => {
-    // How many times they guessed correctly
-    const correctGuesses = roundDetails.filter(r =>
-      r.correctVoters.some(v => v.id === p.id)
-    ).length
+    // Their rounds (songs they submitted that were played)
+    const theirRounds = roundDetails.filter(r => r.correctParticipant.id === p.id)
 
-    // How many of their songs were guessed by anyone
-    const theirSongs = roundDetails.filter(r => r.correctParticipant.id === p.id)
-    const songsGuessedCorrectly = theirSongs.filter(r => r.correctVoters.length > 0).length
+    // Calculate % of correct guesses on their songs
+    // Each round, (participants - 1) people can guess
+    const totalGuessOpportunities = theirRounds.length * (participants.length - 1)
+    const correctGuessesOnThem = theirRounds.reduce(
+      (sum, r) => sum + r.correctVoters.length,
+      0
+    )
+    const guessedPercentage = totalGuessOpportunities > 0
+      ? (correctGuessesOnThem / totalGuessOpportunities) * 100
+      : 0
 
-    // Trivia score
-    const triviaScore = triviaScores[p.id] || 0
+    // Their average song popularity
+    const theirSubmissions = submissions.filter(s => s.participant_id === p.id)
+    const popularitySum = theirSubmissions.reduce(
+      (sum, s) => sum + (s.popularity || 0),
+      0
+    )
+    const avgPopularity = theirSubmissions.length > 0
+      ? popularitySum / theirSubmissions.length
+      : 0
 
     return {
       participant: p,
-      correctGuesses,
-      songsGuessedCorrectly,
-      triviaScore,
-      totalSongs: theirSongs.length,
+      guessedPercentage,
+      avgPopularity,
     }
   })
 
-  // Track used participants to avoid duplicates
-  const usedParticipantIds = new Set<string>()
+  // 📖 Open Book - Highest % guessed correctly (+150)
+  // Consolation for being predictable
+  const openBook = stats.reduce((max, s) =>
+    s.guessedPercentage > max.guessedPercentage ? s : max
+  )
+  awards.push({
+    id: 'open-book',
+    emoji: '📖',
+    title: 'Open Book',
+    description: 'Everyone knows your taste!',
+    points: 150,
+    recipient: openBook.participant,
+    detail: `${Math.round(openBook.guessedPercentage)}% of guesses correct`,
+  })
 
-  // Best Guesser - Most correct guesses (+150)
-  const bestGuesser = [...stats].sort((a, b) => b.correctGuesses - a.correctGuesses)[0]
-  if (bestGuesser.correctGuesses > 0) {
-    awards.push({
-      id: 'best-guesser',
-      emoji: '🎯',
-      title: 'Best Guesser',
-      description: 'Got the most correct guesses!',
-      points: 150,
-      recipient: bestGuesser.participant,
-      detail: `${bestGuesser.correctGuesses} correct guesses`,
-    })
-    usedParticipantIds.add(bestGuesser.participant.id)
-  }
+  // 🎉 Crowd Pleaser - Highest average popularity (+150)
+  // Reward for accessible picks
+  const crowdPleaser = stats.reduce((max, s) =>
+    s.avgPopularity > max.avgPopularity ? s : max
+  )
+  awards.push({
+    id: 'crowd-pleaser',
+    emoji: '🎉',
+    title: 'Crowd Pleaser',
+    description: 'Thanks for the bangers!',
+    points: 150,
+    recipient: crowdPleaser.participant,
+    detail: `${Math.round(crowdPleaser.avgPopularity)} avg popularity`,
+  })
 
-  // Crowd Pleaser - Their songs were guessed the most (+100)
-  const crowdPleaser = [...stats]
-    .filter(s => !usedParticipantIds.has(s.participant.id))
-    .sort((a, b) => b.songsGuessedCorrectly - a.songsGuessedCorrectly)[0]
-  if (crowdPleaser && crowdPleaser.songsGuessedCorrectly > 0) {
-    awards.push({
-      id: 'crowd-pleaser',
-      emoji: '👏',
-      title: 'Crowd Pleaser',
-      description: 'Everyone knew your taste!',
-      points: 100,
-      recipient: crowdPleaser.participant,
-      detail: `${crowdPleaser.songsGuessedCorrectly} songs guessed correctly`,
-    })
-    usedParticipantIds.add(crowdPleaser.participant.id)
-  }
-
-  // Trivia Champion - Highest trivia score (+75)
-  const triviaChampion = [...stats]
-    .filter(s => !usedParticipantIds.has(s.participant.id))
-    .sort((a, b) => b.triviaScore - a.triviaScore)[0]
-  if (triviaChampion && triviaChampion.triviaScore > 0) {
-    awards.push({
-      id: 'trivia-champion',
-      emoji: '🧠',
-      title: 'Trivia Champ',
-      description: 'The brainiest player!',
-      points: 75,
-      recipient: triviaChampion.participant,
-      detail: `${triviaChampion.triviaScore} trivia points`,
-    })
-  }
+  // 🎭 Poker Face - Lowest % guessed correctly (-100)
+  // Penalty for unfair advantage
+  const pokerFace = stats.reduce((min, s) =>
+    s.guessedPercentage < min.guessedPercentage ? s : min
+  )
+  awards.push({
+    id: 'poker-face',
+    emoji: '🎭',
+    title: 'Poker Face',
+    description: 'Too sneaky for your own good',
+    points: -100,
+    recipient: pokerFace.participant,
+    detail: `Only ${Math.round(pokerFace.guessedPercentage)}% guessed correctly`,
+  })
 
   return awards
 }
