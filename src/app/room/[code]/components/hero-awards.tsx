@@ -11,11 +11,11 @@ interface HeroAwardsProps {
   onAwardRevealed?: (award: Award) => void
 }
 
-type RevealPhase = 'category' | 'recipient' | 'points'
+type RevealPhase = 'intro' | 'category' | 'recipient' | 'points'
 
 export function HeroAwards({ awards, onComplete, onAwardRevealed }: HeroAwardsProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [phase, setPhase] = useState<RevealPhase>('category')
+  const [phase, setPhase] = useState<RevealPhase>('intro')
 
   const currentAward = awards[currentIndex]
   const isLastAward = currentIndex === awards.length - 1
@@ -24,6 +24,10 @@ export function HeroAwards({ awards, onComplete, onAwardRevealed }: HeroAwardsPr
 
   // Auto-advance through phases
   useEffect(() => {
+    if (phase === 'intro') {
+      const timer = setTimeout(() => setPhase('category'), 2500)
+      return () => clearTimeout(timer)
+    }
     if (phase === 'category') {
       const timer = setTimeout(() => setPhase('recipient'), 1500)
       return () => clearTimeout(timer)
@@ -51,6 +55,28 @@ export function HeroAwards({ awards, onComplete, onAwardRevealed }: HeroAwardsPr
 
   if (!currentAward) {
     return null
+  }
+
+  // Intro screen
+  if (phase === 'intro') {
+    return (
+      <main className="fixed inset-0 bg-background/95 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="text-center space-y-6 animate-in fade-in zoom-in duration-500">
+          <div className="text-8xl animate-bounce">🎖️</div>
+          <div className="space-y-3">
+            <p className="text-2xl text-muted-foreground animate-in fade-in duration-500" style={{ animationDelay: '300ms' }}>
+              Before we crown the winner...
+            </p>
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: '600ms' }}>
+              Bonus Awards!
+            </h1>
+            <p className="text-lg text-muted-foreground animate-in fade-in duration-500" style={{ animationDelay: '900ms' }}>
+              A few extra points up for grabs...
+            </p>
+          </div>
+        </div>
+      </main>
+    )
   }
 
   return (
