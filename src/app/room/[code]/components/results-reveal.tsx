@@ -10,6 +10,7 @@ import { Award, calculateAwards } from './award-reveal'
 import { HeroAwards } from './hero-awards'
 import { WinnerReveal } from './winner-reveal'
 import { MostLovedSongsReveal } from './most-loved-songs-reveal'
+import { ProcessingResults } from './processing-results'
 import type { Participant, Submission } from '@/types/database'
 
 interface SubmissionWithParticipant extends Submission {
@@ -74,7 +75,7 @@ interface ResultsRevealProps {
   onComplete: () => void
 }
 
-type Phase = 'part1' | 'trivia' | 'part2' | 'favourites' | 'awards' | 'winner'
+type Phase = 'part1' | 'trivia' | 'part2' | 'favourites' | 'awards' | 'processing' | 'winner'
 
 const PLAYER_COLOURS = [
   '#ef4444', '#22c55e', '#3b82f6', '#f59e0b',
@@ -104,6 +105,8 @@ export function ResultsReveal({
   const [awards, setAwards] = useState<Award[]>([])
   const [visibleAwards, setVisibleAwards] = useState(0) // Number of awards revealed
   const [isAutoPlaying, setIsAutoPlaying] = useState(true)
+  const [winnerNarrative, setWinnerNarrative] = useState<string[]>([])
+  const [isLoadingNarrative, setIsLoadingNarrative] = useState(false)
 
   const allRounds = useMemo(() => [...part1Rounds, ...part2Rounds], [part1Rounds, part2Rounds])
 
@@ -192,12 +195,113 @@ export function ResultsReveal({
     return scores
   }, [participants, allRounds, triviaScores, favouriteScores, favouriteVoteCounts, submissions])
 
+  // Generate winner narrative when entering processing phase
+  const generateWinnerNarrative = useCallback(async () => {
+    setIsLoadingNarrative(true)
+
+    // Calculate winner using final scores
+    const sortedByScore = [...participants].sort(
+      (a, b) => (finalScoresCalculated[b.id] || 0) - (finalScoresCalculated[a.id] || 0)
+    )
+    const winner = sortedByScore[0]
+    const runnerUp = sortedByScore[1]
+
+    if (!winner) {
+      setIsLoadingNarrative(false)
+      return
+    }
+
+    // Get winner's submissions
+    const winnerSubmissions = submissions.filter(s => s.participant_id === winner.id)
+
+    // Calculate chameleon points for winner
+    let totalChameleonPoints = 0
+    allRounds.forEach(round => {
+      if (round.submission.is_chameleon && round.correctParticipant.id === winner.id) {
+        const chameleonResult = calculateChameleonPoints(round)
+        if (chameleonResult) {
+          totalChameleonPoints += chameleonResult.points
+        }
+      }
+    })
+
+    // Build request body
+    const requestBody = {
+      winner: {
+        displayName: winner.display_name,
+        songChoices: winnerSubmissions.map(s => ({
+          trackName: s.track_name,
+          artistName: s.artist_name,
+        })),
+      },
+      scoreBreakdown: {
+        part1Correct: part1Rounds.filter(r =>
+          r.correctVoters.some(v => v.id === winner.id)
+        ).length,
+        part2Correct: part2Rounds.filter(r =>
+          r.correctVoters.some(v => v.id === winner.id)
+        ).length,
+        triviaScore: triviaScores[winner.id] || 0,
+        favouriteVotes: favouriteVoteCounts[winner.id] || 0,
+        chameleonPoints: totalChameleonPoints,
+        awardPoints: awards.filter(a => a.recipient.id === winner.id)
+          .reduce((sum, a) => sum + a.points, 0),
+        totalScore: finalScoresCalculated[winner.id] || 0,
+      },
+      competition: {
+        totalPlayers: participants.length,
+        runnerUpScore: runnerUp ? (finalScoresCalculated[runnerUp.id] || 0) : 0,
+        marginOfVictory: (finalScoresCalculated[winner.id] || 0) - (runnerUp ? (finalScoresCalculated[runnerUp.id] || 0) : 0),
+        wasCloseRace: ((finalScoresCalculated[winner.id] || 0) - (runnerUp ? (finalScoresCalculated[runnerUp.id] || 0) : 0)) < 100,
+      },
+      highlights: {
+        mostVotedSong: winnerSubmissions
+          .filter(s => favouriteVotesBySubmission[s.id] > 0)
+          .sort((a, b) => (favouriteVotesBySubmission[b.id] || 0) - (favouriteVotesBySubmission[a.id] || 0))[0]?.track_name,
+        anyAwardsWon: awards
+          .filter(a => a.recipient.id === winner.id)
+          .map(a => a.title),
+      },
+    }
+
+    try {
+      const response = await fetch('/api/generate-winner-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) throw new Error('Failed to generate narrative')
+
+      const data = await response.json()
+      setWinnerNarrative(data.narrative)
+    } catch (error) {
+      console.error('Failed to generate winner narrative:', error)
+      // Use fallback narrative
+      setWinnerNarrative([
+        "Our champion navigated the musical maze with impressive skill, demonstrating a keen ear for their friends' tastes...",
+        "Through rounds of intense guessing and surprising reveals, they proved their musical intuition is second to none...",
+        "In a game where everyone brought their A-game, one player rose above the rest with consistent excellence...",
+        "And now, the moment you've all been waiting for... let's reveal your winner!",
+      ])
+    } finally {
+      setIsLoadingNarrative(false)
+    }
+  }, [participants, finalScoresCalculated, submissions, allRounds, part1Rounds, part2Rounds, triviaScores, favouriteVoteCounts, awards, favouriteVotesBySubmission])
+
   // Sort participants by current score for leaderboard display
   const sortedParticipants = useMemo(() => {
     return [...participants].sort(
       (a, b) => (liveScores[b.id] || 0) - (liveScores[a.id] || 0)
     )
   }, [participants, liveScores])
+
+  // Trigger narrative generation when entering processing phase
+  useEffect(() => {
+    if (phase === 'processing') {
+      generateWinnerNarrative()
+    }
+  }, [phase, generateWinnerNarrative])
 
   // Update chart data whenever scores change
   useEffect(() => {
@@ -373,7 +477,7 @@ export function ResultsReveal({
             if (awards.length > 0) {
               setPhase('awards')
             } else {
-              setPhase('winner')
+              setPhase('processing')
             }
           }}
         />
@@ -394,8 +498,18 @@ export function ResultsReveal({
       return (
         <HeroAwards
           awards={awards}
-          onComplete={() => setPhase('winner')}
+          onComplete={() => setPhase('processing')}
           onAwardRevealed={handleAwardRevealed}
+        />
+      )
+    }
+
+    if (phase === 'processing') {
+      return (
+        <ProcessingResults
+          narrative={winnerNarrative}
+          isLoading={isLoadingNarrative}
+          onComplete={() => setPhase('winner')}
         />
       )
     }
@@ -440,7 +554,7 @@ export function ResultsReveal({
         </div>
 
         {/* Chart & Leaderboard - Hidden on winner/awards phase */}
-        {phase !== 'winner' && phase !== 'awards' && phase !== 'favourites' && (
+        {phase !== 'winner' && phase !== 'awards' && phase !== 'favourites' && phase !== 'processing' && (
           <>
             {/* Chart - Below Song Card */}
             <div className="flex-shrink-0 mt-4">
