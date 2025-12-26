@@ -236,6 +236,130 @@ export function StatsView({
     // Check if there are any favourite votes
     const hasFavouriteVotes = Object.values(favouriteVotesBySubmission).some(v => v > 0)
 
+    // BLAME MAGNET - who got falsely accused the most
+    const falseAccusations: Record<string, number> = {}
+    participants.forEach(p => { falseAccusations[p.id] = 0 })
+
+    roundResults.forEach(round => {
+      const correctId = round.correctParticipant.id
+      round.allGuesses.forEach((guess, guesserId) => {
+        if (guesserId === correctId) return // Skip song owner
+        if (guess.guessedParticipant && !guess.isCorrect) {
+          // This person was wrongly accused
+          falseAccusations[guess.guessedParticipant.id]++
+        }
+      })
+    })
+
+    const blameMagnet = Object.entries(falseAccusations)
+      .map(([id, count]) => ({
+        participant: participants.find(p => p.id === id)!,
+        falseAccusations: count,
+      }))
+      .sort((a, b) => b.falseAccusations - a.falseAccusations)[0]
+
+    // CONTRARIAN - who voted against the majority most often
+    const contrarianCounts: Record<string, { against: number; total: number }> = {}
+    participants.forEach(p => { contrarianCounts[p.id] = { against: 0, total: 0 } })
+
+    roundResults.forEach(round => {
+      const correctId = round.correctParticipant.id
+      // Count votes for each guess
+      const voteCounts: Record<string, number> = {}
+      round.allGuesses.forEach((guess, guesserId) => {
+        if (guesserId === correctId) return
+        if (guess.guessedParticipant) {
+          voteCounts[guess.guessedParticipant.id] = (voteCounts[guess.guessedParticipant.id] || 0) + 1
+        }
+      })
+
+      // Find the majority vote
+      const majorityVote = Object.entries(voteCounts)
+        .sort((a, b) => b[1] - a[1])[0]?.[0]
+
+      if (majorityVote) {
+        round.allGuesses.forEach((guess, guesserId) => {
+          if (guesserId === correctId) return
+          contrarianCounts[guesserId].total++
+          if (guess.guessedParticipant && guess.guessedParticipant.id !== majorityVote) {
+            contrarianCounts[guesserId].against++
+          }
+        })
+      }
+    })
+
+    const contrarian = Object.entries(contrarianCounts)
+      .filter(([, data]) => data.total > 0)
+      .map(([id, data]) => ({
+        participant: participants.find(p => p.id === id)!,
+        percentage: Math.round((data.against / data.total) * 100),
+        against: data.against,
+        total: data.total,
+      }))
+      .sort((a, b) => b.percentage - a.percentage)[0]
+
+    // COMEBACK KID - Split rounds into Part 1 and Part 2, find biggest improvement
+    const midpoint = Math.ceil(roundResults.length / 2)
+    const part1Rounds = roundResults.slice(0, midpoint)
+    const part2Rounds = roundResults.slice(midpoint)
+
+    const comebackData = participants.map(p => {
+      let part1Correct = 0, part1Total = 0
+      let part2Correct = 0, part2Total = 0
+
+      part1Rounds.forEach(round => {
+        if (round.correctParticipant.id === p.id) return
+        const guess = round.allGuesses.get(p.id)
+        if (guess) {
+          part1Total++
+          if (guess.isCorrect) part1Correct++
+        }
+      })
+
+      part2Rounds.forEach(round => {
+        if (round.correctParticipant.id === p.id) return
+        const guess = round.allGuesses.get(p.id)
+        if (guess) {
+          part2Total++
+          if (guess.isCorrect) part2Correct++
+        }
+      })
+
+      const part1Pct = part1Total > 0 ? (part1Correct / part1Total) * 100 : 0
+      const part2Pct = part2Total > 0 ? (part2Correct / part2Total) * 100 : 0
+
+      return {
+        participant: p,
+        part1Pct: Math.round(part1Pct),
+        part2Pct: Math.round(part2Pct),
+        improvement: Math.round(part2Pct - part1Pct),
+      }
+    }).sort((a, b) => b.improvement - a.improvement)
+
+    const comebackKid = comebackData[0]?.improvement > 0 ? comebackData[0] : null
+
+    // SONG AGE TIMELINE - release years by person
+    const songAgeByPerson = participants.map(p => {
+      const theirSongs = allSubmissions.filter(s => s.participant_id === p.id)
+      const years = theirSongs
+        .map(s => s.release_year)
+        .filter((y): y is number => y !== null)
+        .sort((a, b) => a - b)
+
+      const avgYear = years.length > 0
+        ? Math.round(years.reduce((sum, y) => sum + y, 0) / years.length)
+        : null
+
+      return {
+        participant: p,
+        years,
+        avgYear,
+        oldestYear: years[0] || null,
+        newestYear: years[years.length - 1] || null,
+        isCurrentUser: p.id === currentParticipant.id,
+      }
+    }).sort((a, b) => (a.avgYear || 2000) - (b.avgYear || 2000))
+
     return {
       myAccuracyData,
       hardToGuessData,
@@ -249,6 +373,10 @@ export function StatsView({
       favouriteSongRanking,
       favouritePersonRanking,
       hasFavouriteVotes,
+      blameMagnet,
+      contrarian,
+      comebackKid,
+      songAgeByPerson,
     }
   }, [participants, currentParticipant, roundResults, allSubmissions, favouriteVotesByPerson, favouriteVotesBySubmission])
 
@@ -328,6 +456,112 @@ export function StatsView({
             </Card>
           )}
         </div>
+
+        {/* Second Row - Fun Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {/* Blame Magnet */}
+          {stats.blameMagnet && stats.blameMagnet.falseAccusations > 0 && (
+            <Card className="border-orange-500/30 bg-orange-500/5">
+              <CardContent className="pt-4 text-center">
+                <p className="text-xs text-muted-foreground mb-2">🎯 Blame Magnet</p>
+                <Avatar className="h-12 w-12 mx-auto mb-2">
+                  <AvatarImage src={stats.blameMagnet.participant.avatar_url || undefined} />
+                  <AvatarFallback>{stats.blameMagnet.participant.display_name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <p className="font-semibold text-sm truncate">{stats.blameMagnet.participant.display_name}</p>
+                <p className="text-orange-500 font-bold">{stats.blameMagnet.falseAccusations}×</p>
+                <p className="text-xs text-muted-foreground">falsely accused</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Contrarian */}
+          {stats.contrarian && stats.contrarian.percentage > 0 && (
+            <Card className="border-pink-500/30 bg-pink-500/5">
+              <CardContent className="pt-4 text-center">
+                <p className="text-xs text-muted-foreground mb-2">🦊 The Contrarian</p>
+                <Avatar className="h-12 w-12 mx-auto mb-2">
+                  <AvatarImage src={stats.contrarian.participant.avatar_url || undefined} />
+                  <AvatarFallback>{stats.contrarian.participant.display_name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <p className="font-semibold text-sm truncate">{stats.contrarian.participant.display_name}</p>
+                <p className="text-pink-500 font-bold">{stats.contrarian.percentage}%</p>
+                <p className="text-xs text-muted-foreground">against the crowd</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Comeback Kid */}
+          {stats.comebackKid && (
+            <Card className="border-emerald-500/30 bg-emerald-500/5">
+              <CardContent className="pt-4 text-center">
+                <p className="text-xs text-muted-foreground mb-2">📈 Comeback Kid</p>
+                <Avatar className="h-12 w-12 mx-auto mb-2">
+                  <AvatarImage src={stats.comebackKid.participant.avatar_url || undefined} />
+                  <AvatarFallback>{stats.comebackKid.participant.display_name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <p className="font-semibold text-sm truncate">{stats.comebackKid.participant.display_name}</p>
+                <p className="text-emerald-500 font-bold">+{stats.comebackKid.improvement}%</p>
+                <p className="text-xs text-muted-foreground">Part 1 → Part 2</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Song Age Timeline */}
+        {stats.songAgeByPerson.some(p => p.avgYear !== null) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">📅 Song Release Years by Player</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {stats.songAgeByPerson.map((player) => {
+                  if (!player.avgYear) return null
+                  const minYear = Math.min(...stats.songAgeByPerson.flatMap(p => p.years))
+                  const maxYear = Math.max(...stats.songAgeByPerson.flatMap(p => p.years))
+                  const range = maxYear - minYear || 1
+
+                  return (
+                    <div key={player.participant.id} className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={player.participant.avatar_url || undefined} />
+                          <AvatarFallback className="text-xs">{player.participant.display_name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <span className={`text-sm font-medium ${player.isCurrentUser ? 'text-primary' : ''}`}>
+                          {player.participant.display_name}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          avg: {player.avgYear}
+                        </span>
+                      </div>
+                      <div className="relative h-6 bg-muted rounded-full overflow-hidden">
+                        {/* Year markers */}
+                        {player.years.map((year, idx) => (
+                          <div
+                            key={idx}
+                            className="absolute top-1 bottom-1 w-2 rounded-full bg-primary"
+                            style={{
+                              left: `${((year - minYear) / range) * 100}%`,
+                              transform: 'translateX(-50%)',
+                            }}
+                            title={`${year}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+                {/* Year scale */}
+                <div className="flex justify-between text-xs text-muted-foreground pt-2 border-t">
+                  <span>{Math.min(...stats.songAgeByPerson.flatMap(p => p.years))}</span>
+                  <span>{Math.max(...stats.songAgeByPerson.flatMap(p => p.years))}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Song Guess Rate Chart - Full Width */}
         <Card>
