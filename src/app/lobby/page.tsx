@@ -15,26 +15,14 @@ import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import type { Room } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
+import { RoomHistoryItem } from './components/room-history-item'
 
 interface RoomHistory {
   room: Room
   isHost: boolean
   playerCount: number
+  submittedCount: number
   lastActive: Date
-}
-
-function getRelativeTime(date: Date): string {
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMins / 60)
-  const diffDays = Math.floor(diffHours / 24)
-
-  if (diffMins < 1) return 'just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString()
 }
 
 export default function LobbyPage() {
@@ -46,6 +34,7 @@ export default function LobbyPage() {
   const [isJoining, setIsJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [roomHistory, setRoomHistory] = useState<RoomHistory[]>([])
+  const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
   const { setTrack } = useBackgroundMusic()
@@ -92,13 +81,17 @@ export default function LobbyPage() {
           // Fetch player counts for each room
           const { data: participantCounts } = await supabase
             .from('participants')
-            .select('room_id')
+            .select('room_id, has_submitted')
             .in('room_id', roomIds)
 
           // Count participants per room
           const countMap = new Map<string, number>()
+          const submittedMap = new Map<string, number>()
           participantCounts?.forEach(p => {
             countMap.set(p.room_id, (countMap.get(p.room_id) || 0) + 1)
+            if (p.has_submitted) {
+              submittedMap.set(p.room_id, (submittedMap.get(p.room_id) || 0) + 1)
+            }
           })
 
           const history: RoomHistory[] = roomsWithParticipants
@@ -108,6 +101,7 @@ export default function LobbyPage() {
                 room,
                 isHost: p.is_host,
                 playerCount: countMap.get(room.id) || 0,
+                submittedCount: submittedMap.get(room.id) || 0,
                 lastActive: new Date(room.updated_at),
               }
             })
@@ -165,6 +159,29 @@ export default function LobbyPage() {
       console.error('Error creating room:', err)
       setError('Failed to create room. Please try again.')
       setIsCreating(false)
+    }
+  }
+
+  const handleDeleteRoom = async (room: Room) => {
+    setDeletingRoomId(room.id)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/rooms/${room.room_code}/delete`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to delete room')
+      }
+
+      setRoomHistory((prev) => prev.filter((entry) => entry.room.id !== room.id))
+    } catch (err) {
+      console.error('Error deleting room:', err)
+      setError('Failed to delete room. Please try again.')
+    } finally {
+      setDeletingRoomId(null)
     }
   }
 
@@ -321,46 +338,13 @@ export default function LobbyPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {roomHistory.map(({ room, isHost, playerCount, lastActive }) => (
-                  <button
-                    key={room.id}
-                    onClick={() => router.push(`/room/${room.room_code}`)}
-                    className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors text-left border border-border/50"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-sm leading-tight">
-                          {room.name || 'Untitled lobby'}
-                        </span>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <span className="font-mono font-bold">
-                            {room.room_code}
-                          </span>
-                          <span>·</span>
-                          <span>{playerCount} {playerCount === 1 ? 'player' : 'players'}</span>
-                          <span>·</span>
-                          <span>{getRelativeTime(lastActive)}</span>
-                        </div>
-                      </div>
-                      {isHost && (
-                        <span className="text-xs text-primary">(Host)</span>
-                      )}
-                    </div>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      room.status === 'LOBBY' ? 'bg-blue-500/20 text-blue-500' :
-                      room.status === 'SUBMITTING' ? 'bg-amber-500/20 text-amber-500' :
-                      room.status === 'PLAYING_ROUND_1' || room.status === 'PLAYING_ROUND_2' ? 'bg-green-500/20 text-green-500' :
-                      room.status === 'TRIVIA' ? 'bg-purple-500/20 text-purple-500' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
-                      {room.status === 'LOBBY' ? 'Lobby' :
-                       room.status === 'SUBMITTING' ? 'Picking Songs' :
-                       room.status === 'PLAYING_ROUND_1' ? 'Part 1' :
-                       room.status === 'TRIVIA' ? 'Trivia' :
-                       room.status === 'PLAYING_ROUND_2' ? 'Part 2' :
-                       'Finished'}
-                    </span>
-                  </button>
+                {roomHistory.map((historyItem) => (
+                  <RoomHistoryItem
+                    key={historyItem.room.id}
+                    {...historyItem}
+                    onDelete={handleDeleteRoom}
+                    isDeleting={deletingRoomId === historyItem.room.id}
+                  />
                 ))}
               </div>
             </CardContent>
