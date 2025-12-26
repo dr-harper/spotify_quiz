@@ -88,7 +88,7 @@ export function AppHeader() {
       provider: 'spotify',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: 'user-read-email user-read-private playlist-modify-private playlist-modify-public',
+        scopes: 'user-read-email user-read-private playlist-modify-private playlist-modify-public ugc-image-upload',
       },
     })
     if (error) {

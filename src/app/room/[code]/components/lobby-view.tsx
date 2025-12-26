@@ -104,7 +104,7 @@ export function LobbyView({
       provider: 'spotify',
       options: {
         redirectTo: redirectUrl,
-        scopes: 'playlist-modify-public playlist-modify-private',
+        scopes: 'user-read-email user-read-private playlist-modify-private playlist-modify-public ugc-image-upload',
       },
     })
   }
