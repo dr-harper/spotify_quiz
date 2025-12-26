@@ -86,38 +86,38 @@ export function RoomHistoryItem({
       tabIndex={0}
       onClick={handleNavigate}
       onKeyDown={handleKeyDown}
-      className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors border border-border/50 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+      className="flex items-center justify-between gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors border border-border/50 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
     >
-      <div className="flex items-center gap-3">
-        <div className="flex flex-col">
-          <span className="font-semibold text-sm leading-tight">
+      {/* Left side: Room info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-sm truncate">
             {room.name || 'Untitled lobby'}
           </span>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="font-mono font-bold">
-              {room.room_code}
-            </span>
-            <span>·</span>
-            <span>{playerCount} {playerCount === 1 ? 'player' : 'players'}</span>
-            <span>·</span>
-            <span>{getRelativeTime(lastActive)}</span>
-          </div>
-          {hasUnfinishedSubmissions && (
-            <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
-              <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-              <span>
-                {submittedCount} {submittedCount === 1 ? 'player has' : 'players have'} submitted answers
-                — quiz not finished
-              </span>
-            </div>
+          {isHost && (
+            <span className="text-xs text-primary flex-shrink-0">(Host)</span>
           )}
         </div>
-        {isHost && (
-          <span className="text-xs text-primary">(Host)</span>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+          <span className="font-mono font-bold">{room.room_code}</span>
+          <span>·</span>
+          <span>{playerCount} {playerCount === 1 ? 'player' : 'players'}</span>
+          <span>·</span>
+          <span>{getRelativeTime(lastActive)}</span>
+        </div>
+        {hasUnfinishedSubmissions && (
+          <div className="mt-1 flex items-center gap-1 text-xs text-amber-600">
+            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden />
+            <span className="truncate">
+              {submittedCount} submitted — not finished
+            </span>
+          </div>
         )}
       </div>
-      <div className="flex items-center gap-2">
-        <span className={`text-xs px-2 py-1 rounded-full ${statusDisplay.className}`}>
+
+      {/* Right side: Status + Delete */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${statusDisplay.className}`}>
           {statusDisplay.text}
         </span>
         {isHost && (
@@ -126,7 +126,7 @@ export function RoomHistoryItem({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-muted-foreground"
+                className="h-8 w-8 text-muted-foreground flex-shrink-0"
                 title="Delete lobby"
                 aria-label="Delete lobby"
                 onClick={(e) => e.stopPropagation()}
