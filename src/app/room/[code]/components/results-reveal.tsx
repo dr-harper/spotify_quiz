@@ -73,6 +73,7 @@ interface ResultsRevealProps {
   favouriteVotesBySubmission: Record<string, number> // submissionId -> vote count
   submissions: Submission[] // For award popularity calculations
   onComplete: () => void
+  onWinnerCelebrationStart?: () => void
 }
 
 type Phase = 'part1' | 'trivia' | 'part2' | 'favourites' | 'awards' | 'processing' | 'winner'
@@ -92,6 +93,7 @@ export function ResultsReveal({
   favouriteVotesBySubmission,
   submissions,
   onComplete,
+  onWinnerCelebrationStart,
 }: ResultsRevealProps) {
   const [phase, setPhase] = useState<Phase>('part1')
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -302,6 +304,13 @@ export function ResultsReveal({
       generateWinnerNarrative()
     }
   }, [phase, generateWinnerNarrative])
+
+  // Notify parent when winner celebration starts
+  useEffect(() => {
+    if (phase === 'winner' && onWinnerCelebrationStart) {
+      onWinnerCelebrationStart()
+    }
+  }, [phase, onWinnerCelebrationStart])
 
   // Update chart data whenever scores change
   useEffect(() => {
