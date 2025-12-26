@@ -9,6 +9,7 @@ import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { LobbyView } from './components/lobby-view'
 import { SubmissionView } from './components/submission-view'
 import { QuizView } from './components/quiz-view'
+import { QuizIntro } from './components/quiz-intro'
 import { TriviaView } from './components/trivia-view'
 import { FavouritesView } from './components/favourites-view'
 import { ResultsView } from './components/results-view'
@@ -33,6 +34,7 @@ export default function RoomPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isPickingSongs, setIsPickingSongs] = useState(false)
+  const [showIntro, setShowIntro] = useState(true)
 
   // Fetch room and participants
   const fetchRoomData = useCallback(async () => {
@@ -159,6 +161,41 @@ export default function RoomPage() {
       stopMusic()
     }
   }, [room?.status, playMusic, stopMusic, room])
+
+  // Reset intro when game starts fresh
+  useEffect(() => {
+    if (room?.status === 'PLAYING_ROUND_1') {
+      setShowIntro(true)
+    }
+  }, [room?.status])
+
+  // Subscribe to intro dismissal broadcast
+  useEffect(() => {
+    if (!room?.id) return
+
+    const channel = supabase
+      .channel(`intro-sync:${room.id}`)
+      .on('broadcast', { event: 'intro_dismissed' }, () => {
+        setShowIntro(false)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [room?.id, supabase])
+
+  // Host dismisses intro and broadcasts to all players
+  const handleDismissIntro = async () => {
+    if (!room?.id) return
+
+    await supabase.channel(`intro-sync:${room.id}`).send({
+      type: 'broadcast',
+      event: 'intro_dismissed',
+      payload: {},
+    })
+    setShowIntro(false)
+  }
 
   // Apply theme colour class to document
   const settings = room?.settings || DEFAULT_GAME_SETTINGS
@@ -318,6 +355,15 @@ export default function RoomPage() {
           />
         )
       case 'PLAYING_ROUND_1':
+        if (showIntro) {
+          return (
+            <QuizIntro
+              settings={room.settings}
+              isHost={currentParticipant.is_host}
+              onStart={handleDismissIntro}
+            />
+          )
+        }
         return (
           <QuizView
             key="round1"

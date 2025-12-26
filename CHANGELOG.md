@@ -49,14 +49,38 @@ All notable changes to Festive Frequencies will be documented in this file.
   - Toggle to enable/disable trivia round
   - Question count selector (5 or 10 questions)
 
+- **Favourites Voting Round**: New voting phase after Round 2
+  - Players vote for their top 3 favourite songs
+  - Can't vote for own submissions
+  - Songs shown anonymously (no submitter revealed)
+  - 50 points awarded per vote received
+  - Real-time tracking of who has voted
+  - Demo page at `/demo/favourites` for UI testing
+
+- **Quiz Intro Screen**: New overview screen before quiz starts
+  - Shows all game phases with descriptions
+  - Dynamically adapts based on settings (hides trivia if disabled)
+  - Displays scoring information
+  - Host-controlled "Let's Go!" button syncs all players
+  - Demo page at `/demo/intro` for UI testing
+
+- **New Awards**: Additional awards in results reveal
+  - ⭐ People's Favourite (+200 points) - most votes received (supports ties)
+  - 🧠 Trivia Champ (+150 points) - highest trivia score (if trivia enabled)
+  - Total of 5 awards now available
+
+- **Image Fallback**: Broken Spotify album art images now show a fallback icon
+
 ### Changed
 
-- Room statuses updated: `PLAYING` split into `PLAYING_ROUND_1`, `TRIVIA`, and `PLAYING_ROUND_2`
+- Room statuses updated: `PLAYING` split into `PLAYING_ROUND_1`, `TRIVIA`, `PLAYING_ROUND_2`, and `FAVOURITES`
 - Quiz view now shows "Part 1" or "Part 2" badge to indicate current phase
 - Lobby page updated to show trivia status with purple indicator
+- Game flow: LOBBY → SUBMITTING → PLAYING_ROUND_1 → TRIVIA → PLAYING_ROUND_2 → FAVOURITES → RESULTS
 
 ### Database
 
 - New `trivia_questions` table for storing generated questions per game
 - New `trivia_answers` table for storing player responses
-- Row-level security policies for both tables
+- New `favourite_votes` table for storing player favourite song votes
+- Row-level security policies for all new tables
