@@ -43,8 +43,8 @@ export function QuizView({
   onNavigateToLobby,
 }: QuizViewProps) {
   const settings = room.settings || DEFAULT_GAME_SETTINGS
-  // Participants who can vote (includes spectators with has_submitted=true)
-  const votingParticipants = participants.filter(p => p.has_submitted)
+  // Participants who can vote (submitted players + all spectators)
+  const votingParticipants = participants.filter(p => p.has_submitted || p.is_spectator)
   // Participants who actually submitted songs (excludes spectators) - these appear as voting options
   const songSubmitters = participants.filter(p => p.has_submitted && !p.is_spectator)
   const [rounds, setRounds] = useState<RoundData[]>([])
