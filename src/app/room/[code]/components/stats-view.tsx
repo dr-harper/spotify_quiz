@@ -793,10 +793,14 @@ export function StatsView({
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {stats.favouriteSongRanking.slice(0, 5).map((item, index) => (
+                  {stats.favouriteSongRanking.slice(0, 5).map((item, index, arr) => {
+                    // Calculate rank with ties (count how many have MORE votes)
+                    const rank = arr.filter(x => x.votes > item.votes).length + 1
+                    const rankDisplay = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}`
+                    return (
                     <div key={item.submission.id} className="flex items-center gap-3">
                       <span className="text-lg w-6">
-                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
+                        {rankDisplay}
                       </span>
                       {item.submission.album_art_url && (
                         <img
@@ -816,7 +820,8 @@ export function StatsView({
                       </div>
                       <span className="text-sm font-bold text-yellow-500">{item.votes} votes</span>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </CardContent>
             </Card>
