@@ -125,6 +125,7 @@ function ConfettiEffect() {
           className="absolute w-2 h-2 rounded-full animate-confetti"
           style={{
             left: piece.left,
+            top: '-20px',
             backgroundColor: piece.colour,
             animationDelay: piece.delay,
             animationDuration: piece.duration,
@@ -134,11 +135,14 @@ function ConfettiEffect() {
       <style jsx>{`
         @keyframes confetti {
           0% {
-            transform: translateY(-10px) rotate(0deg);
+            transform: translateY(0) rotate(0deg);
+            opacity: 0;
+          }
+          5% {
             opacity: 1;
           }
           100% {
-            transform: translateY(100vh) rotate(720deg);
+            transform: translateY(calc(100vh + 40px)) rotate(720deg);
             opacity: 0;
           }
         }
