@@ -280,8 +280,11 @@ Join: ${url}`
   }, [resumeBackgroundMusic])
 
   const isHost = currentParticipant.is_host
-  const allSubmitted = participants.every(p => p.has_submitted)
-  const submittedCount = participants.filter(p => p.has_submitted).length
+  // Spectators don't need to submit, so filter them out
+  const players = participants.filter(p => !p.is_spectator)
+  const spectators = participants.filter(p => p.is_spectator)
+  const allSubmitted = players.every(p => p.has_submitted)
+  const submittedCount = players.filter(p => p.has_submitted).length
 
   // Check if user has Spotify connected (for playlist creation)
   const [hasSpotify, setHasSpotify] = useState(false)
@@ -854,13 +857,20 @@ Join: ${url}`
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg flex items-center justify-between">
                     Players
-                    <Badge variant={allSubmitted ? 'default' : 'secondary'}>
-                      {submittedCount}/{participants.length} ready
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={allSubmitted ? 'default' : 'secondary'}>
+                        {submittedCount}/{players.length} ready
+                      </Badge>
+                      {spectators.length > 0 && (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          👁 {spectators.length}
+                        </Badge>
+                      )}
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Progress value={(submittedCount / participants.length) * 100} />
+                  <Progress value={players.length > 0 ? (submittedCount / players.length) * 100 : 0} />
 
                   <div className="space-y-2">
                     {participants.map(p => (
@@ -882,7 +892,9 @@ Join: ${url}`
                             <span className="text-muted-foreground text-xs ml-2">(You)</span>
                           )}
                         </span>
-                        {p.has_submitted ? (
+                        {p.is_spectator ? (
+                          <Badge variant="outline" className="text-muted-foreground">👁 Spectator</Badge>
+                        ) : p.has_submitted ? (
                           <Badge variant="default" className="bg-accent">Ready</Badge>
                         ) : (
                           <Badge variant="outline" className="animate-pulse">Picking...</Badge>
@@ -935,7 +947,7 @@ Join: ${url}`
                   <>
                     {!allSubmitted && (
                       <p className="text-center text-sm text-amber-500">
-                        {participants.length - submittedCount} player{participants.length - submittedCount !== 1 ? 's' : ''} will be excluded
+                        {players.length - submittedCount} player{players.length - submittedCount !== 1 ? 's' : ''} will join as spectator{players.length - submittedCount !== 1 ? 's' : ''}
                       </p>
                     )}
                     <Button
@@ -1034,7 +1046,11 @@ Join: ${url}`
                 <div
                   key={p.id}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
-                    p.has_submitted ? 'bg-green-500/20 text-green-400' : 'bg-muted/50'
+                    p.is_spectator
+                      ? 'bg-muted/30 text-muted-foreground'
+                      : p.has_submitted
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-muted/50'
                   }`}
                 >
                   <Avatar className="h-5 w-5">
@@ -1045,7 +1061,11 @@ Join: ${url}`
                   </Avatar>
                   <span>{p.display_name}</span>
                   {p.is_host && <span className="text-xs">👑</span>}
-                  {p.has_submitted && <span className="text-xs">✓</span>}
+                  {p.is_spectator ? (
+                    <span className="text-xs">👁</span>
+                  ) : p.has_submitted ? (
+                    <span className="text-xs">✓</span>
+                  ) : null}
                 </div>
               ))}
             </div>

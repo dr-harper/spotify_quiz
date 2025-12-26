@@ -43,8 +43,10 @@ export function QuizView({
   onNavigateToLobby,
 }: QuizViewProps) {
   const settings = room.settings || DEFAULT_GAME_SETTINGS
-  // Only include participants who have submitted songs
-  const submittedParticipants = participants.filter(p => p.has_submitted)
+  // Participants who can vote (includes spectators with has_submitted=true)
+  const votingParticipants = participants.filter(p => p.has_submitted)
+  // Participants who actually submitted songs (excludes spectators) - these appear as voting options
+  const songSubmitters = participants.filter(p => p.has_submitted && !p.is_spectator)
   const [rounds, setRounds] = useState<RoundData[]>([])
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0)
   const [hasVoted, setHasVoted] = useState(false)
@@ -96,7 +98,7 @@ export function QuizView({
         const { data: submissions } = await supabase
           .from('submissions')
           .select('*')
-          .in('participant_id', submittedParticipants.map(p => p.id))
+          .in('participant_id', songSubmitters.map(p => p.id))
 
         if (!submissions || submissions.length === 0) {
           console.error('No submissions found')
@@ -119,7 +121,7 @@ export function QuizView({
     }
 
     await fetchRounds()
-  }, [isHost, room.id, submittedParticipants, supabase])
+  }, [isHost, room.id, songSubmitters, supabase])
 
   const fetchRounds = useCallback(async () => {
     const { data: quizRounds } = await supabase
@@ -150,13 +152,13 @@ export function QuizView({
 
     const roundData: RoundData[] = filteredRounds.map(round => {
       const submission = submissions.find(s => s.id === round.submission_id)!
-      const correctParticipant = submittedParticipants.find(p => p.id === submission.participant_id)!
+      const correctParticipant = songSubmitters.find(p => p.id === submission.participant_id)!
       return { round, submission, correctParticipant }
     })
 
     setRounds(roundData)
     setIsLoading(false)
-  }, [room.id, submittedParticipants, supabase, roundType])
+  }, [room.id, songSubmitters, supabase, roundType])
 
   useEffect(() => {
     if (initRef.current) return
@@ -556,7 +558,7 @@ export function QuizView({
                   You declared <strong>{participants.find(p => p.id === selectedParticipant)?.display_name || 'your target'}</strong> as your imitation target.
                 </p>
                 <Badge variant="outline" className="text-sm px-3 py-1">
-                  {roundVoters.size}/{submittedParticipants.length} voted
+                  {roundVoters.size}/{votingParticipants.length} voted
                 </Badge>
                 <p className="text-sm text-muted-foreground">
                   Waiting for others to guess...
@@ -582,16 +584,16 @@ export function QuizView({
                 {hasVoted && selectedParticipant && (
                   <div className="text-center mb-3 space-y-2">
                     <p className="text-sm">
-                      You guessed <strong className="text-primary">{submittedParticipants.find(p => p.id === selectedParticipant)?.display_name}</strong>
+                      You guessed <strong className="text-primary">{songSubmitters.find(p => p.id === selectedParticipant)?.display_name}</strong>
                     </p>
                     <Badge variant="outline" className="text-sm px-3 py-1">
-                      {roundVoters.size}/{submittedParticipants.length} voted
+                      {roundVoters.size}/{votingParticipants.length} voted
                     </Badge>
                   </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-3">
-                  {submittedParticipants.map((participant) => (
+                  {songSubmitters.map((participant) => (
                     <Button
                       key={participant.id}
                       onClick={() => handleVote(participant.id)}
@@ -639,13 +641,13 @@ export function QuizView({
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
               <span>Players</span>
               <Badge variant="outline" className="text-xs">
-                {roundVoters.size}/{submittedParticipants.length} voted
+                {roundVoters.size}/{votingParticipants.length} voted
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="flex flex-wrap gap-2">
-              {submittedParticipants.map((participant) => {
+              {votingParticipants.map((participant) => {
                 const hasVotedThisRound = roundVoters.has(participant.id)
                 return (
                   <div
@@ -663,6 +665,9 @@ export function QuizView({
                       </AvatarFallback>
                     </Avatar>
                     <span className="truncate max-w-20">{participant.display_name}</span>
+                    {participant.is_spectator && (
+                      <span className="text-muted-foreground text-xs">👁</span>
+                    )}
                     {hasVotedThisRound ? (
                       <span className="text-accent">✓</span>
                     ) : (

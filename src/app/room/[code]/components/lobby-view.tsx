@@ -15,7 +15,7 @@ import type { Room, Participant, PlaylistSummary, TriviaFact } from '@/types/dat
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
 import { LOBBY_NAME_MAX_LENGTH } from '@/constants/rooms'
 import { useBackgroundMusic } from '@/components/background-music'
-import { Play, Pause, Eye, RefreshCw, X } from 'lucide-react'
+import { Play, Pause, Eye, RefreshCw, X, User, UserMinus } from 'lucide-react'
 
 interface TriviaQuestion {
   trackName: string
@@ -55,6 +55,7 @@ export function LobbyView({
   const [roomNameInput, setRoomNameInput] = useState(room.name ?? '')
   const [isSavingName, setIsSavingName] = useState(false)
   const [removingParticipantId, setRemovingParticipantId] = useState<string | null>(null)
+  const [togglingSpectatorId, setTogglingSpectatorId] = useState<string | null>(null)
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false)
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(null)
   const [hasSpotify, setHasSpotify] = useState(false)
@@ -131,8 +132,12 @@ export function LobbyView({
     fetchSubmissions()
   }, [currentParticipant.has_submitted, currentParticipant.id, supabase])
 
-  // Generate playlist summary when all players have submitted
-  const allPlayersSubmitted = participants.length >= 2 && participants.every(p => p.has_submitted)
+  // Count players (excluding spectators) vs spectators
+  const players = participants.filter(p => !p.is_spectator)
+  const spectators = participants.filter(p => p.is_spectator)
+
+  // Generate playlist summary when all players (excluding spectators) have submitted
+  const allPlayersSubmitted = players.length >= 2 && players.every(p => p.has_submitted)
 
   useEffect(() => {
     // Only generate if:
@@ -275,7 +280,25 @@ export function LobbyView({
     }
   }
 
-  const submittedCount = participants.filter(p => p.has_submitted).length
+  const toggleSpectator = async (participantId: string, makeSpectator: boolean) => {
+    setTogglingSpectatorId(participantId)
+    try {
+      await supabase
+        .from('participants')
+        .update({
+          is_spectator: makeSpectator,
+          // Spectators are treated as "submitted" so they're included in voting
+          has_submitted: makeSpectator ? true : undefined,
+        })
+        .eq('id', participantId)
+    } catch (error) {
+      console.error('Failed to toggle spectator status:', error)
+    } finally {
+      setTogglingSpectatorId(null)
+    }
+  }
+
+  const submittedCount = players.filter(p => p.has_submitted).length
   const hasSubmitted = currentParticipant.has_submitted
   // Need at least 2 players who have submitted to start the quiz
   const canStartQuiz = submittedCount >= 2
@@ -467,9 +490,16 @@ Join: ${url}`
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between">
                   <span>Players</span>
-                  <Badge variant="secondary">
-                    {submittedCount}/{participants.length} ready
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">
+                      {submittedCount}/{players.length} ready
+                    </Badge>
+                    {spectators.length > 0 && (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        👁 {spectators.length}
+                      </Badge>
+                    )}
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -500,28 +530,58 @@ Join: ${url}`
                           Host
                         </Badge>
                       )}
-                      {/* Submission status */}
-                      {participant.has_submitted ? (
-                        <Badge variant="default" className="bg-green-600 text-xs">Ready</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs">Not ready</Badge>
+                      {/* Spectator badge */}
+                      {participant.is_spectator && (
+                        <Badge variant="outline" className="text-muted-foreground text-xs">
+                          👁 Spectator
+                        </Badge>
                       )}
-                      {/* Remove button for hosts (can't remove self or other hosts) */}
-                      {isHost && !participant.is_host && participant.id !== currentParticipant.id && onRemoveParticipant && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleRemoveParticipant(participant.id)}
-                          disabled={removingParticipantId === participant.id}
-                          title="Remove player"
-                        >
-                          {removingParticipantId === participant.id ? (
-                            <span className="animate-spin">⏳</span>
-                          ) : (
-                            <span>✕</span>
+                      {/* Submission status - only show for non-spectators */}
+                      {!participant.is_spectator && (
+                        participant.has_submitted ? (
+                          <Badge variant="default" className="bg-green-600 text-xs">Ready</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs">Not ready</Badge>
+                        )
+                      )}
+                      {/* Host controls: spectator toggle and remove */}
+                      {isHost && !participant.is_host && participant.id !== currentParticipant.id && (
+                        <>
+                          {/* Toggle spectator button */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                            onClick={() => toggleSpectator(participant.id, !participant.is_spectator)}
+                            disabled={togglingSpectatorId === participant.id}
+                            title={participant.is_spectator ? 'Make player' : 'Make spectator'}
+                          >
+                            {togglingSpectatorId === participant.id ? (
+                              <span className="animate-spin text-xs">⏳</span>
+                            ) : participant.is_spectator ? (
+                              <User className="w-4 h-4" />
+                            ) : (
+                              <UserMinus className="w-4 h-4" />
+                            )}
+                          </Button>
+                          {/* Remove button */}
+                          {onRemoveParticipant && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleRemoveParticipant(participant.id)}
+                              disabled={removingParticipantId === participant.id}
+                              title="Remove player"
+                            >
+                              {removingParticipantId === participant.id ? (
+                                <span className="animate-spin">⏳</span>
+                              ) : (
+                                <X className="w-4 h-4" />
+                              )}
+                            </Button>
                           )}
-                        </Button>
+                        </>
                       )}
                     </div>
                   ))}
@@ -731,11 +791,11 @@ Join: ${url}`
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Songs collected</span>
                     <span className="font-medium">
-                      {submittedCount * settings.songsRequired} / {participants.length * settings.songsRequired}
+                      {submittedCount * settings.songsRequired} / {players.length * settings.songsRequired}
                     </span>
                   </div>
                   <Progress
-                    value={(submittedCount / participants.length) * 100}
+                    value={players.length > 0 ? (submittedCount / players.length) * 100 : 0}
                     className="h-2"
                   />
                 </div>

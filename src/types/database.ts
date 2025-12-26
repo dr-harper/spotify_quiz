@@ -65,6 +65,7 @@ export interface Participant {
   score: number
   is_host: boolean
   has_submitted: boolean
+  is_spectator: boolean  // Spectators can vote but don't submit songs
   created_at: string
   // AI-generated music taste summary
   ai_summary: string | null

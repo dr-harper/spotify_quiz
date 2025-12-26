@@ -122,8 +122,12 @@ export function calculateAwards(
 
   if (participants.length < 2) return awards
 
-  // Calculate stats for each participant
-  const stats = participants.map(p => {
+  // Song submitters are participants who submitted songs (not spectators)
+  // Song-related awards can only go to song submitters
+  const songSubmitters = participants.filter(p => !p.is_spectator)
+
+  // Calculate stats for each song submitter (song-related awards)
+  const songStats = songSubmitters.map(p => {
     // Their rounds (songs they submitted that were played)
     const theirRounds = roundDetails.filter(r => r.correctParticipant.id === p.id)
 
@@ -153,80 +157,86 @@ export function calculateAwards(
       guessedPercentage,
       avgPopularity,
       favouriteVotes: favouriteVoteCounts?.[p.id] || 0,
-      triviaScore: triviaScores?.[p.id] || 0,
     }
   })
 
-  // 📖 Open Book - Highest % guessed correctly (+150)
-  // Consolation for being predictable
-  const openBook = stats.reduce((max, s) =>
-    s.guessedPercentage > max.guessedPercentage ? s : max
-  )
-  awards.push({
-    id: 'open-book',
-    emoji: '📖',
-    title: 'Open Book',
-    description: 'Everyone knows your taste!',
-    points: 150,
-    recipient: openBook.participant,
-    detail: `${Math.round(openBook.guessedPercentage)}% of guesses correct`,
-  })
-
-  // 🎉 Crowd Pleaser - Highest average popularity (+150)
-  // Reward for accessible picks
-  const crowdPleaser = stats.reduce((max, s) =>
-    s.avgPopularity > max.avgPopularity ? s : max
-  )
-  awards.push({
-    id: 'crowd-pleaser',
-    emoji: '🎉',
-    title: 'Crowd Pleaser',
-    description: 'Thanks for the bangers!',
-    points: 150,
-    recipient: crowdPleaser.participant,
-    detail: `${Math.round(crowdPleaser.avgPopularity)} avg popularity`,
-  })
-
-  // 🎭 Poker Face - Lowest % guessed correctly (-100)
-  // Penalty for unfair advantage
-  const pokerFace = stats.reduce((min, s) =>
-    s.guessedPercentage < min.guessedPercentage ? s : min
-  )
-  awards.push({
-    id: 'poker-face',
-    emoji: '🎭',
-    title: 'Poker Face',
-    description: 'Too sneaky for your own good',
-    points: -100,
-    recipient: pokerFace.participant,
-    detail: `Only ${Math.round(pokerFace.guessedPercentage)}% guessed correctly`,
-  })
-
-  // ⭐ People's Favourite - Most favourite votes received (+200)
-  // Only add if there were favourite votes
-  if (favouriteVoteCounts && Object.values(favouriteVoteCounts).some(v => v > 0)) {
-    const maxVotes = Math.max(...stats.map(s => s.favouriteVotes))
-    // Find all participants tied for most votes
-    const favouriteWinners = stats.filter(s => s.favouriteVotes === maxVotes && maxVotes > 0)
-
-    // Award to all tied winners
-    favouriteWinners.forEach(winner => {
-      awards.push({
-        id: `peoples-favourite-${winner.participant.id}`,
-        emoji: '⭐',
-        title: "People's Favourite",
-        description: 'Your songs were loved!',
-        points: 200,
-        recipient: winner.participant,
-        detail: `${winner.favouriteVotes} votes received`,
-      })
+  // Only calculate song-related awards if there are song submitters
+  if (songStats.length >= 2) {
+    // 📖 Open Book - Highest % guessed correctly (+150)
+    // Consolation for being predictable
+    const openBook = songStats.reduce((max, s) =>
+      s.guessedPercentage > max.guessedPercentage ? s : max
+    )
+    awards.push({
+      id: 'open-book',
+      emoji: '📖',
+      title: 'Open Book',
+      description: 'Everyone knows your taste!',
+      points: 150,
+      recipient: openBook.participant,
+      detail: `${Math.round(openBook.guessedPercentage)}% of guesses correct`,
     })
+
+    // 🎉 Crowd Pleaser - Highest average popularity (+150)
+    // Reward for accessible picks
+    const crowdPleaser = songStats.reduce((max, s) =>
+      s.avgPopularity > max.avgPopularity ? s : max
+    )
+    awards.push({
+      id: 'crowd-pleaser',
+      emoji: '🎉',
+      title: 'Crowd Pleaser',
+      description: 'Thanks for the bangers!',
+      points: 150,
+      recipient: crowdPleaser.participant,
+      detail: `${Math.round(crowdPleaser.avgPopularity)} avg popularity`,
+    })
+
+    // 🎭 Poker Face - Lowest % guessed correctly (-100)
+    // Penalty for unfair advantage
+    const pokerFace = songStats.reduce((min, s) =>
+      s.guessedPercentage < min.guessedPercentage ? s : min
+    )
+    awards.push({
+      id: 'poker-face',
+      emoji: '🎭',
+      title: 'Poker Face',
+      description: 'Too sneaky for your own good',
+      points: -100,
+      recipient: pokerFace.participant,
+      detail: `Only ${Math.round(pokerFace.guessedPercentage)}% guessed correctly`,
+    })
+
+    // ⭐ People's Favourite - Most favourite votes received (+200)
+    // Only add if there were favourite votes (spectators can't receive this - no songs)
+    if (favouriteVoteCounts && Object.values(favouriteVoteCounts).some(v => v > 0)) {
+      const maxVotes = Math.max(...songStats.map(s => s.favouriteVotes))
+      // Find all song submitters tied for most votes
+      const favouriteWinners = songStats.filter(s => s.favouriteVotes === maxVotes && maxVotes > 0)
+
+      // Award to all tied winners
+      favouriteWinners.forEach(winner => {
+        awards.push({
+          id: `peoples-favourite-${winner.participant.id}`,
+          emoji: '⭐',
+          title: "People's Favourite",
+          description: 'Your songs were loved!',
+          points: 200,
+          recipient: winner.participant,
+          detail: `${winner.favouriteVotes} votes received`,
+        })
+      })
+    }
   }
 
   // 🧠 Trivia Champ - Highest trivia score (+150)
-  // Only add if there were trivia scores
+  // All participants (including spectators) can win this
   if (triviaScores && Object.values(triviaScores).some(v => v > 0)) {
-    const triviaChamp = stats.reduce((max, s) =>
+    const triviaStats = participants.map(p => ({
+      participant: p,
+      triviaScore: triviaScores[p.id] || 0,
+    }))
+    const triviaChamp = triviaStats.reduce((max, s) =>
       s.triviaScore > max.triviaScore ? s : max
     )
     if (triviaChamp.triviaScore > 0) {

@@ -234,6 +234,19 @@ export default function RoomPage() {
   const startQuiz = async () => {
     if (!room || !currentParticipant?.is_host) return
 
+    // Auto-convert non-submitters to spectators
+    // This allows them to participate in voting without having submitted songs
+    const nonSubmitters = participants.filter(p => !p.has_submitted && !p.is_spectator)
+    if (nonSubmitters.length > 0) {
+      await supabase
+        .from('participants')
+        .update({
+          is_spectator: true,
+          has_submitted: true,  // Mark as "submitted" so they're included in voting
+        })
+        .in('id', nonSubmitters.map(p => p.id))
+    }
+
     // Fetch old rounds first to delete associated votes
     const { data: oldRounds } = await supabase
       .from('quiz_rounds')

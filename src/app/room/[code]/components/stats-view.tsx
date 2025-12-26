@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import type { Participant, Submission } from '@/types/database'
 
@@ -48,17 +49,20 @@ export function StatsView({
 }: StatsViewProps) {
   // Calculate all statistics
   const stats = useMemo(() => {
-    // 1. Guessing accuracy per opponent (for current player)
+    // Song submitters are participants who actually submitted songs (not spectators)
+    const songSubmitters = participants.filter(p => !p.is_spectator)
+
+    // 1. Guessing accuracy per opponent (for current player) - only track song submitters
     const myGuessAccuracy: Record<string, { correct: number; total: number }> = {}
-    participants.forEach(p => {
+    songSubmitters.forEach(p => {
       if (p.id !== currentParticipant.id) {
         myGuessAccuracy[p.id] = { correct: 0, total: 0 }
       }
     })
 
-    // 2. How hard each player is to guess (for everyone)
+    // 2. How hard each player is to guess (only song submitters have songs to guess)
     const hardToGuess: Record<string, { correctGuesses: number; totalGuesses: number }> = {}
-    participants.forEach(p => {
+    songSubmitters.forEach(p => {
       hardToGuess[p.id] = { correctGuesses: 0, totalGuesses: 0 }
     })
 
@@ -162,8 +166,8 @@ export function StatsView({
       })
       .sort((a, b) => b.percentage - a.percentage)
 
-    // Popularity insights per player
-    const popularityByPlayer = participants.map(p => {
+    // Popularity insights per player (only song submitters have songs)
+    const popularityByPlayer = songSubmitters.map(p => {
       const theirSongs = allSubmissions.filter(s => s.participant_id === p.id)
       const avgPopularity = theirSongs.length > 0
         ? Math.round(theirSongs.reduce((sum, s) => sum + (s.popularity || 0), 0) / theirSongs.length)
@@ -174,6 +178,7 @@ export function StatsView({
         avatar: p.avatar_url,
         avgPopularity,
         isCurrentUser: p.id === currentParticipant.id,
+        isSpectator: p.is_spectator,
       }
     }).sort((a, b) => b.avgPopularity - a.avgPopularity)
 
@@ -338,8 +343,8 @@ export function StatsView({
 
     const comebackKid = comebackData[0]?.improvement > 0 ? comebackData[0] : null
 
-    // SONG AGE TIMELINE - release years by person
-    const songAgeByPerson = participants.map(p => {
+    // SONG AGE TIMELINE - release years by person (only song submitters have songs)
+    const songAgeByPerson = songSubmitters.map(p => {
       const theirSongs = allSubmissions.filter(s => s.participant_id === p.id)
       const years = theirSongs
         .map(s => s.release_year)

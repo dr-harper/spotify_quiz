@@ -11,6 +11,7 @@ import { SongLibrary } from './song-library'
 import { StatsView } from './stats-view'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
 import { calculateAwards } from './award-reveal'
+import { Badge } from '@/components/ui/badge'
 import type { Room, Participant, Submission } from '@/types/database'
 
 // Chameleon scoring constants (must match results-reveal.tsx)
@@ -354,9 +355,10 @@ export function ResultsView({
 
   const handlePlayAgain = async () => {
     stopVictoryMusic()
+    // Reset all participants: score, submission status, and spectator status
     await supabase
       .from('participants')
-      .update({ score: 0, has_submitted: false })
+      .update({ score: 0, has_submitted: false, is_spectator: false })
       .eq('room_id', room.id)
 
     const participantIds = participants.map(p => p.id)
@@ -566,10 +568,13 @@ export function ResultsView({
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
-                        <p className="font-semibold">
+                        <p className="font-semibold flex items-center gap-2">
                           {participant.display_name}
                           {participant.id === currentParticipant.id && (
-                            <span className="text-muted-foreground text-sm ml-2">(You)</span>
+                            <span className="text-muted-foreground text-sm">(You)</span>
+                          )}
+                          {participant.is_spectator && (
+                            <Badge variant="outline" className="text-muted-foreground text-xs">👁</Badge>
                           )}
                         </p>
                       </div>
@@ -703,8 +708,9 @@ export function ResultsView({
                                 <AvatarImage src={p.avatar_url || undefined} />
                                 <AvatarFallback className="text-xs">{p.display_name.charAt(0)}</AvatarFallback>
                               </Avatar>
-                              <span className="text-xs truncate max-w-[60px]" title={p.display_name}>
+                              <span className="text-xs truncate max-w-[60px] flex items-center gap-0.5" title={p.display_name}>
                                 {p.id === currentParticipant.id ? 'You' : p.display_name.split(' ')[0]}
+                                {p.is_spectator && <span className="text-muted-foreground">👁</span>}
                               </span>
                             </div>
                           </th>
