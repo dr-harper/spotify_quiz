@@ -1,10 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 
 export async function POST(
-  _request: Request,
-  { params }: { params: { code: string } },
+  _request: NextRequest,
+  { params }: { params: Promise<{ code: string }> },
 ) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -14,7 +14,8 @@ export async function POST(
   }
 
   const admin = createAdminClient()
-  const roomCode = params.code.toUpperCase()
+  const { code } = await params
+  const roomCode = code.toUpperCase()
 
   const { data: room, error: roomError } = await admin
     .from('rooms')
