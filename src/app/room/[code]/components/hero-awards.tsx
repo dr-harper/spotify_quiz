@@ -176,21 +176,17 @@ export function HeroAwards({ awards, onComplete, onAwardRevealed }: HeroAwardsPr
           )}
 
           {/* Continue button - only show after points revealed */}
-          <div
-            className={`pt-4 transition-all duration-500 ${
-              phase !== 'points'
-                ? 'opacity-0 pointer-events-none'
-                : 'opacity-100'
-            }`}
-          >
-            <Button
-              onClick={handleNext}
-              size="lg"
-              className="px-8"
-            >
-              {isLastAward ? 'See Final Results' : 'Next Award'}
-            </Button>
-          </div>
+          {phase === 'points' && (
+            <div className="pt-4 animate-in fade-in duration-300">
+              <Button
+                onClick={handleNext}
+                size="lg"
+                className="px-8"
+              >
+                {isLastAward ? 'See Final Results' : 'Next Award'}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
