@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { SongRevealCard } from './song-reveal-card'
 import { Award, calculateAwards } from './award-reveal'
 import { HeroAwards } from './hero-awards'
@@ -86,6 +87,7 @@ export function ResultsReveal({
     participants.forEach(p => { initial[p.id] = 0 })
     return initial
   })
+  const [chartData, setChartData] = useState<Array<{ step: number; [key: string]: number }>>([])
   const [awards, setAwards] = useState<Award[]>([])
   const [visibleAwards, setVisibleAwards] = useState(0) // Number of awards revealed
   const [isAutoPlaying, setIsAutoPlaying] = useState(true)
@@ -150,6 +152,17 @@ export function ResultsReveal({
       (a, b) => (liveScores[b.id] || 0) - (liveScores[a.id] || 0)
     )
   }, [participants, liveScores])
+
+  // Update chart data whenever scores change
+  useEffect(() => {
+    setChartData(prev => {
+      const newPoint: { step: number; [key: string]: number } = { step: prev.length + 1 }
+      participants.forEach(p => {
+        newPoint[p.display_name] = liveScores[p.id] || 0
+      })
+      return [...prev, newPoint]
+    })
+  }, [liveScores, participants])
 
   // Handle advancing to next item
   const advanceToNext = useCallback(() => {
@@ -339,6 +352,9 @@ export function ResultsReveal({
     return null
   }
 
+  // Calculate max score for Y axis
+  const maxScore = Math.max(...Object.values(liveScores), 100)
+
   // Progress calculation (songs + trivia (if any) + awards + winner)
   const triviaSteps = hasTriviaScores ? 1 : 0
   const totalSteps = part1Rounds.length + triviaSteps + part2Rounds.length + awards.length + 1
@@ -357,47 +373,98 @@ export function ResultsReveal({
           {getCurrentContent()}
         </div>
 
-        {/* Leaderboard - Below Song Card */}
-        <div className="flex-shrink-0 mt-4">
-          <Card className="border border-primary/20">
-            <CardContent className="py-3 px-4">
-              <div className="space-y-2">
-                {sortedParticipants.map((participant, index) => (
-                  <div
-                    key={participant.id}
-                    className="flex items-center gap-3 transition-all duration-500 ease-out"
-                    style={{
-                      transform: `translateY(0)`,
-                    }}
-                  >
-                    {/* Rank */}
-                    <span className="w-5 text-center text-sm font-medium text-muted-foreground">
-                      {index + 1}
-                    </span>
-
-                    {/* Avatar */}
-                    <Avatar className="h-7 w-7">
-                      <AvatarImage src={participant.avatar_url || undefined} />
-                      <AvatarFallback className="text-xs">
-                        {participant.display_name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    {/* Name */}
-                    <span className="flex-1 text-sm font-medium truncate">
-                      {participant.display_name}
-                    </span>
-
-                    {/* Score */}
-                    <span className="text-sm font-bold tabular-nums text-primary">
-                      {liveScores[participant.id] || 0}
-                    </span>
+        {/* Chart & Leaderboard - Hidden on winner/awards phase */}
+        {phase !== 'winner' && phase !== 'awards' && (
+          <>
+            {/* Chart - Below Song Card */}
+            <div className="flex-shrink-0 mt-4">
+              <Card className="border border-primary/20">
+                <CardContent className="py-3">
+                  <div className="h-[120px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={chartData}
+                        margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                      >
+                        <XAxis
+                          dataKey="step"
+                          domain={[1, totalSteps]}
+                          tick={false}
+                          axisLine={false}
+                        />
+                        <YAxis
+                          domain={[0, maxScore + 100]}
+                          tick={false}
+                          axisLine={false}
+                          width={0}
+                        />
+                        {participants.map((participant, index) => (
+                          <Line
+                            key={participant.id}
+                            type="monotone"
+                            dataKey={participant.display_name}
+                            stroke={PLAYER_COLOURS[index % PLAYER_COLOURS.length]}
+                            strokeWidth={2}
+                            dot={false}
+                            isAnimationActive={false}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Leaderboard - Below Chart */}
+            <div className="flex-shrink-0 mt-2">
+              <Card className="border border-primary/20">
+                <CardContent className="py-3 px-4">
+                  <div className="space-y-2">
+                    {sortedParticipants.map((participant, index) => {
+                      const colourIndex = participants.findIndex(p => p.id === participant.id)
+                      return (
+                        <div
+                          key={participant.id}
+                          className="flex items-center gap-3 transition-all duration-500 ease-out"
+                        >
+                          {/* Rank */}
+                          <span className="w-5 text-center text-sm font-medium text-muted-foreground">
+                            {index + 1}
+                          </span>
+
+                          {/* Colour indicator matching chart line */}
+                          <div
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: PLAYER_COLOURS[colourIndex % PLAYER_COLOURS.length] }}
+                          />
+
+                          {/* Avatar */}
+                          <Avatar className="h-7 w-7">
+                            <AvatarImage src={participant.avatar_url || undefined} />
+                            <AvatarFallback className="text-xs">
+                              {participant.display_name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+
+                          {/* Name */}
+                          <span className="flex-1 text-sm font-medium truncate">
+                            {participant.display_name}
+                          </span>
+
+                          {/* Score */}
+                          <span className="text-sm font-bold tabular-nums text-primary">
+                            {liveScores[participant.id] || 0}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
 
         {/* Controls - Bottom Section */}
         <div className="flex-shrink-0 mt-4">
