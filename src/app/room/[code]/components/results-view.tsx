@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -81,9 +81,33 @@ export function ResultsView({
   const [showAnswers, setShowAnswers] = useState(false)
   const [hasSpotify, setHasSpotify] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const celebrationAudioRef = useRef<HTMLAudioElement | null>(null)
   const router = useRouter()
   const supabase = createClient()
   const isHost = currentParticipant.is_host
+
+  // Prepare celebration audio
+  useEffect(() => {
+    celebrationAudioRef.current = new Audio('/winner-music.mp3')
+    celebrationAudioRef.current.loop = true
+    celebrationAudioRef.current.preload = 'auto'
+    celebrationAudioRef.current.volume = 0.5
+
+    return () => {
+      celebrationAudioRef.current?.pause()
+      celebrationAudioRef.current = null
+    }
+  }, [])
+
+  const startVictoryMusic = useCallback(() => {
+    if (!celebrationAudioRef.current) return
+    celebrationAudioRef.current.currentTime = 0
+    celebrationAudioRef.current.play().catch(console.error)
+  }, [])
+
+  const stopVictoryMusic = useCallback(() => {
+    celebrationAudioRef.current?.pause()
+  }, [])
 
   // Check if user has Spotify connected
   useEffect(() => {
@@ -329,6 +353,7 @@ export function ResultsView({
   }
 
   const handlePlayAgain = async () => {
+    stopVictoryMusic()
     await supabase
       .from('participants')
       .update({ score: 0, has_submitted: false })
@@ -349,6 +374,7 @@ export function ResultsView({
   }
 
   const handleBackToLobby = () => {
+    stopVictoryMusic()
     router.push('/lobby')
   }
 
@@ -458,6 +484,7 @@ export function ResultsView({
         favouriteVotesBySubmission={favouriteVotesBySubmission}
         submissions={allSubmissions}
         onComplete={() => setPhase('results')}
+        onWinnerCelebrationStart={startVictoryMusic}
       />
     )
   }

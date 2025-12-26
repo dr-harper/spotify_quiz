@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,6 @@ interface WinnerRevealProps {
 
 export function WinnerReveal({ winner, finalScore, onComplete }: WinnerRevealProps) {
   const [phase, setPhase] = useState<'building' | 'reveal' | 'celebrate'>('building')
-  const audioRef = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
     // "And the winner is..." phase
@@ -28,19 +27,8 @@ export function WinnerReveal({ winner, finalScore, onComplete }: WinnerRevealPro
     }
   }, [])
 
-  // Play celebration music when winner is revealed
-  useEffect(() => {
-    if (phase === 'reveal' && audioRef.current) {
-      audioRef.current.volume = 0.5
-      audioRef.current.play().catch(console.error)
-    }
-  }, [phase])
-
   return (
     <Card className="border-2 border-yellow-500/50 bg-gradient-to-b from-yellow-500/10 to-transparent relative overflow-hidden">
-      {/* Winner Celebration Music */}
-      <audio ref={audioRef} src="/winner-music.mp3" preload="auto" />
-
       {/* Confetti Effect */}
       {phase === 'celebrate' && <ConfettiEffect />}
 
