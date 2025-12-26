@@ -88,14 +88,14 @@ export function ResultsView({
 
   // Prepare celebration audio
   useEffect(() => {
-    celebrationAudioRef.current = new Audio('/winner-music.mp3')
-    celebrationAudioRef.current.loop = true
-    celebrationAudioRef.current.preload = 'auto'
-    celebrationAudioRef.current.volume = 0.5
+    const audio = new Audio('/winner-music.mp3')
+    audio.loop = true
+    audio.preload = 'auto'
+    audio.volume = 0.5
+    celebrationAudioRef.current = audio
 
     return () => {
-      celebrationAudioRef.current?.pause()
-      celebrationAudioRef.current = null
+      audio.pause()
     }
   }, [])
 
