@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ResultsReveal } from './results-reveal'
 import { SongLibrary } from './song-library'
+import { StatsView } from './stats-view'
 import { GameBreadcrumbs } from '@/components/game-breadcrumbs'
 import { calculateAwards } from './award-reveal'
 import type { Room, Participant, Submission } from '@/types/database'
@@ -63,7 +64,7 @@ export function ResultsView({
   currentParticipant,
   onPlayAgain,
 }: ResultsViewProps) {
-  const [phase, setPhase] = useState<'reveal' | 'results' | 'library'>('reveal')
+  const [phase, setPhase] = useState<'reveal' | 'results' | 'library' | 'stats'>('reveal')
   const [part1Rounds, setPart1Rounds] = useState<RoundDetail[]>([])
   const [part2Rounds, setPart2Rounds] = useState<RoundDetail[]>([])
   const [triviaScores, setTriviaScores] = useState<Record<string, number>>({})
@@ -429,6 +430,19 @@ export function ResultsView({
     )
   }
 
+  // Show stats view
+  if (phase === 'stats') {
+    return (
+      <StatsView
+        participants={participants}
+        currentParticipant={currentParticipant}
+        roundResults={roundResults}
+        allSubmissions={allSubmissions}
+        onClose={() => setPhase('results')}
+      />
+    )
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center p-4 py-8">
       <div className="w-full max-w-6xl">
@@ -490,21 +504,30 @@ export function ResultsView({
               </CardContent>
             </Card>
 
-            {/* View Options - toggle for mobile, Song Library button for desktop */}
-            <div className="flex gap-2">
+            {/* View Options */}
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setShowAnswers(!showAnswers)}
+                  variant="outline"
+                  className="flex-1 lg:hidden"
+                >
+                  {showAnswers ? 'Hide Answers' : 'Show Answers'}
+                </Button>
+                <Button
+                  onClick={() => setPhase('library')}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Song Library
+                </Button>
+              </div>
               <Button
-                onClick={() => setShowAnswers(!showAnswers)}
+                onClick={() => setPhase('stats')}
                 variant="outline"
-                className="flex-1 lg:hidden"
+                className="w-full"
               >
-                {showAnswers ? 'Hide Answers' : 'Show Answers'}
-              </Button>
-              <Button
-                onClick={() => setPhase('library')}
-                variant="outline"
-                className="flex-1"
-              >
-                Song Library
+                📊 View Statistics
               </Button>
             </div>
 
