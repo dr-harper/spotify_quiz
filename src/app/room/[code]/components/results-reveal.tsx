@@ -9,6 +9,7 @@ import { SongRevealCard } from './song-reveal-card'
 import { Award, calculateAwards } from './award-reveal'
 import { HeroAwards } from './hero-awards'
 import { WinnerReveal } from './winner-reveal'
+import { MostLovedSongsReveal } from './most-loved-songs-reveal'
 import type { Participant, Submission } from '@/types/database'
 
 interface SubmissionWithParticipant extends Submission {
@@ -68,11 +69,12 @@ interface ResultsRevealProps {
   triviaScores: Record<string, number> // participantId -> trivia score
   favouriteVoteCounts: Record<string, number> // participantId -> vote count
   favouriteScores: Record<string, number> // participantId -> favourite points (50 per vote)
+  favouriteVotesBySubmission: Record<string, number> // submissionId -> vote count
   submissions: Submission[] // For award popularity calculations
   onComplete: () => void
 }
 
-type Phase = 'part1' | 'trivia' | 'part2' | 'awards' | 'winner'
+type Phase = 'part1' | 'trivia' | 'part2' | 'favourites' | 'awards' | 'winner'
 
 const PLAYER_COLOURS = [
   '#ef4444', '#22c55e', '#3b82f6', '#f59e0b',
@@ -86,6 +88,7 @@ export function ResultsReveal({
   triviaScores,
   favouriteVoteCounts,
   favouriteScores,
+  favouriteVotesBySubmission,
   submissions,
   onComplete,
 }: ResultsRevealProps) {
@@ -125,6 +128,22 @@ export function ResultsReveal({
     )
     setAwards(calculatedAwards)
   }, [participants, allRounds, submissions, favouriteVoteCounts, triviaScores])
+
+  // Calculate top 3 most loved songs for favourites reveal
+  const mostLovedSongs = useMemo(() => {
+    const songsWithVotes = submissions
+      .filter(s => favouriteVotesBySubmission[s.id] > 0)
+      .map(s => ({
+        submission: s,
+        participant: participants.find(p => p.id === s.participant_id)!,
+        votes: favouriteVotesBySubmission[s.id] || 0,
+      }))
+      .sort((a, b) => b.votes - a.votes)
+      .slice(0, 3)
+    return songsWithVotes
+  }, [submissions, favouriteVotesBySubmission, participants])
+
+  const hasFavouriteSongs = mostLovedSongs.length > 0
 
   // Pre-calculate final scores (used for skip and winner determination)
   const finalScoresCalculated = useMemo(() => {
@@ -260,15 +279,17 @@ export function ResultsReveal({
       if (currentIndex < part2Rounds.length - 1) {
         setCurrentIndex(prev => prev + 1)
       } else {
-        // Go to awards phase (full-screen hero reveal)
-        if (awards.length > 0) {
+        // Go to favourites phase if there are favourite songs
+        if (hasFavouriteSongs) {
+          setPhase('favourites')
+        } else if (awards.length > 0) {
           setPhase('awards')
         } else {
           setPhase('winner')
         }
       }
     }
-  }, [phase, currentIndex, part1Rounds, part2Rounds, triviaScores, awards, hasTriviaScores, participants])
+  }, [phase, currentIndex, part1Rounds, part2Rounds, triviaScores, awards, hasTriviaScores, hasFavouriteSongs, participants])
 
   // Get current content based on phase
   const getCurrentContent = () => {
@@ -343,6 +364,22 @@ export function ResultsReveal({
       )
     }
 
+    if (phase === 'favourites') {
+      // Full-screen most loved songs reveal
+      return (
+        <MostLovedSongsReveal
+          songs={mostLovedSongs}
+          onComplete={() => {
+            if (awards.length > 0) {
+              setPhase('awards')
+            } else {
+              setPhase('winner')
+            }
+          }}
+        />
+      )
+    }
+
     if (phase === 'awards') {
       // Full-screen hero awards reveal
       const handleAwardRevealed = (award: Award) => {
@@ -403,7 +440,7 @@ export function ResultsReveal({
         </div>
 
         {/* Chart & Leaderboard - Hidden on winner/awards phase */}
-        {phase !== 'winner' && phase !== 'awards' && (
+        {phase !== 'winner' && phase !== 'awards' && phase !== 'favourites' && (
           <>
             {/* Chart - Below Song Card */}
             <div className="flex-shrink-0 mt-4">
@@ -555,11 +592,16 @@ export function ResultsReveal({
                 })
 
                 setLiveScores(scoresBeforeAwards)
-                setPhase('awards')
+                // Go to favourites if available, otherwise awards
+                if (hasFavouriteSongs) {
+                  setPhase('favourites')
+                } else {
+                  setPhase('awards')
+                }
               }}
               className="text-muted-foreground"
             >
-              Skip to Awards
+              Skip to {hasFavouriteSongs ? 'Fan Favourites' : 'Awards'}
             </Button>
           </div>
         </div>

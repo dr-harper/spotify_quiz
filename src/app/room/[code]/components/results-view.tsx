@@ -455,6 +455,7 @@ export function ResultsView({
         triviaScores={triviaScores}
         favouriteVoteCounts={favouriteVoteCounts}
         favouriteScores={favouriteScores}
+        favouriteVotesBySubmission={favouriteVotesBySubmission}
         submissions={allSubmissions}
         onComplete={() => setPhase('results')}
       />
