@@ -25,7 +25,7 @@ export function HeroAwards({ awards, onComplete, onAwardRevealed }: HeroAwardsPr
   // Auto-advance through phases
   useEffect(() => {
     if (phase === 'intro') {
-      const timer = setTimeout(() => setPhase('category'), 2500)
+      const timer = setTimeout(() => setPhase('category'), 4000)
       return () => clearTimeout(timer)
     }
     if (phase === 'category') {
@@ -149,33 +149,32 @@ export function HeroAwards({ awards, onComplete, onAwardRevealed }: HeroAwardsPr
           </div>
 
           {/* Points - revealed last */}
-          <div
-            className={`transition-all duration-500 ${
-              phase !== 'points'
-                ? 'opacity-0 scale-50'
-                : 'opacity-100 scale-100'
-            }`}
-          >
+          {phase === 'points' && (
             <div
-              className={`text-5xl font-bold ${
-                isPositive
-                  ? 'text-green-500'
-                  : isNegative
-                  ? 'text-red-500 animate-shake'
-                  : 'text-muted-foreground'
-              }`}
+              key={`points-${currentIndex}`}
+              className="animate-in fade-in zoom-in duration-500"
             >
-              {isPositive ? '+' : ''}{currentAward.points}
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">points</p>
+              <div
+                className={`text-5xl font-bold ${
+                  isPositive
+                    ? 'text-green-500'
+                    : isNegative
+                    ? 'text-red-500 animate-shake'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                {isPositive ? '+' : ''}{currentAward.points}
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">points</p>
 
-            {/* Detail stat */}
-            {currentAward.detail && (
-              <p className="text-muted-foreground mt-4 text-sm italic">
-                {currentAward.detail}
-              </p>
-            )}
-          </div>
+              {/* Detail stat */}
+              {currentAward.detail && (
+                <p className="text-muted-foreground mt-4 text-sm italic">
+                  {currentAward.detail}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Continue button - only show after points revealed */}
           <div
