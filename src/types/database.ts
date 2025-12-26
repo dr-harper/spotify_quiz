@@ -1,4 +1,4 @@
-export type RoomStatus = 'LOBBY' | 'SUBMITTING' | 'PLAYING_ROUND_1' | 'TRIVIA' | 'PLAYING_ROUND_2' | 'RESULTS'
+export type RoomStatus = 'LOBBY' | 'SUBMITTING' | 'PLAYING_ROUND_1' | 'TRIVIA' | 'PLAYING_ROUND_2' | 'FAVOURITES' | 'RESULTS'
 
 export type ThemeColor = 'green' | 'red' | 'blue' | 'purple' | 'gold'
 
@@ -218,4 +218,19 @@ export interface TriviaAnswer {
   is_correct: boolean
   points_awarded: number
   answered_at: string
+}
+
+// Favourite song votes - players vote for their top 3 songs
+export interface FavouriteVote {
+  id: string
+  room_id: string
+  voter_id: string
+  submission_id: string
+  created_at: string
+}
+
+export interface FavouriteVoteInsert {
+  room_id: string
+  voter_id: string
+  submission_id: string
 }

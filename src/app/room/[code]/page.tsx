@@ -10,6 +10,7 @@ import { LobbyView } from './components/lobby-view'
 import { SubmissionView } from './components/submission-view'
 import { QuizView } from './components/quiz-view'
 import { TriviaView } from './components/trivia-view'
+import { FavouritesView } from './components/favourites-view'
 import { ResultsView } from './components/results-view'
 import { useBackgroundMusic } from '@/components/background-music'
 import { FestiveBackground } from '@/components/festive-background'
@@ -353,7 +354,17 @@ export default function RoomPage() {
             participants={participants}
             currentParticipant={currentParticipant}
             roundType="round2"
-            onRoundEnd={() => updateRoomStatus('RESULTS')}
+            onRoundEnd={() => updateRoomStatus('FAVOURITES')}
+            onNavigateToLobby={() => updateRoomStatus('LOBBY')}
+          />
+        )
+      case 'FAVOURITES':
+        return (
+          <FavouritesView
+            room={room}
+            participants={participants}
+            currentParticipant={currentParticipant}
+            onFavouritesEnd={() => updateRoomStatus('RESULTS')}
             onNavigateToLobby={() => updateRoomStatus('LOBBY')}
           />
         )

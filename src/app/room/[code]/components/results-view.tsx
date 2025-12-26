@@ -68,6 +68,8 @@ export function ResultsView({
   const [part1Rounds, setPart1Rounds] = useState<RoundDetail[]>([])
   const [part2Rounds, setPart2Rounds] = useState<RoundDetail[]>([])
   const [triviaScores, setTriviaScores] = useState<Record<string, number>>({})
+  const [favouriteScores, setFavouriteScores] = useState<Record<string, number>>({})
+  const [favouriteVoteCounts, setFavouriteVoteCounts] = useState<Record<string, number>>({})
   const [finalScores, setFinalScores] = useState<Participant[]>([])
   const [roundResults, setRoundResults] = useState<RoundResult[]>([])
   const [allSubmissions, setAllSubmissions] = useState<SubmissionWithParticipant[]>([])
@@ -140,6 +142,32 @@ export function ResultsView({
         triviaScoreMap[answer.participant_id] = (triviaScoreMap[answer.participant_id] || 0) + (answer.points_awarded || 0)
       })
       setTriviaScores(triviaScoreMap)
+
+      // Fetch favourite votes and calculate favourite scores (50 points per vote received)
+      const { data: favouriteVotes } = await supabase
+        .from('favourite_votes')
+        .select('submission_id')
+        .eq('room_id', room.id)
+
+      const favouriteScoreMap: Record<string, number> = {}
+      const favouriteVoteCountMap: Record<string, number> = {}
+      participants.forEach(p => {
+        favouriteScoreMap[p.id] = 0
+        favouriteVoteCountMap[p.id] = 0
+      })
+      if (favouriteVotes && submissionsData) {
+        favouriteVotes.forEach(vote => {
+          const submission = submissionsData.find(s => s.id === vote.submission_id)
+          if (submission) {
+            favouriteScoreMap[submission.participant_id] =
+              (favouriteScoreMap[submission.participant_id] || 0) + 50
+            favouriteVoteCountMap[submission.participant_id] =
+              (favouriteVoteCountMap[submission.participant_id] || 0) + 1
+          }
+        })
+      }
+      setFavouriteScores(favouriteScoreMap)
+      setFavouriteVoteCounts(favouriteVoteCountMap)
 
       if (quizRounds && quizRounds.length > 0) {
         // Fetch all votes for the room's rounds
@@ -347,18 +375,29 @@ export function ResultsView({
       scores[id] = (scores[id] || 0) + score
     })
 
+    // Add favourite scores (50 points per vote received)
+    Object.entries(favouriteScores).forEach(([id, score]) => {
+      scores[id] = (scores[id] || 0) + score
+    })
+
     // Add award points
     const submissionsWithParticipantId = allSubmissions.map(s => ({
       participant_id: s.participant_id,
       popularity: s.popularity,
     }))
-    const awards = calculateAwards(participants, allRounds, submissionsWithParticipantId)
+    const awards = calculateAwards(
+      participants,
+      allRounds,
+      submissionsWithParticipantId,
+      favouriteVoteCounts,
+      triviaScores
+    )
     awards.forEach(award => {
       scores[award.recipient.id] = (scores[award.recipient.id] || 0) + award.points
     })
 
     return scores
-  }, [participants, part1Rounds, part2Rounds, triviaScores, allSubmissions])
+  }, [participants, part1Rounds, part2Rounds, triviaScores, favouriteScores, favouriteVoteCounts, allSubmissions])
 
   // Sort participants by calculated score
   const sortedParticipants = useMemo(() => {
@@ -407,6 +446,8 @@ export function ResultsView({
         part1Rounds={part1Rounds}
         part2Rounds={part2Rounds}
         triviaScores={triviaScores}
+        favouriteVoteCounts={favouriteVoteCounts}
+        favouriteScores={favouriteScores}
         submissions={allSubmissions}
         onComplete={() => setPhase('results')}
       />

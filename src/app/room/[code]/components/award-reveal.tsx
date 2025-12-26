@@ -114,7 +114,9 @@ export function calculateAwards(
     correctParticipant: Participant
     correctVoters: Participant[]
   }>,
-  submissions: SubmissionWithParticipant[]
+  submissions: SubmissionWithParticipant[],
+  favouriteVoteCounts?: Record<string, number>,  // participant_id -> vote count
+  triviaScores?: Record<string, number>  // participant_id -> trivia points
 ): Award[] {
   const awards: Award[] = []
 
@@ -150,6 +152,8 @@ export function calculateAwards(
       participant: p,
       guessedPercentage,
       avgPopularity,
+      favouriteVotes: favouriteVoteCounts?.[p.id] || 0,
+      triviaScore: triviaScores?.[p.id] || 0,
     }
   })
 
@@ -197,6 +201,46 @@ export function calculateAwards(
     recipient: pokerFace.participant,
     detail: `Only ${Math.round(pokerFace.guessedPercentage)}% guessed correctly`,
   })
+
+  // ⭐ People's Favourite - Most favourite votes received (+200)
+  // Only add if there were favourite votes
+  if (favouriteVoteCounts && Object.values(favouriteVoteCounts).some(v => v > 0)) {
+    const maxVotes = Math.max(...stats.map(s => s.favouriteVotes))
+    // Find all participants tied for most votes
+    const favouriteWinners = stats.filter(s => s.favouriteVotes === maxVotes && maxVotes > 0)
+
+    // Award to all tied winners
+    favouriteWinners.forEach(winner => {
+      awards.push({
+        id: `peoples-favourite-${winner.participant.id}`,
+        emoji: '⭐',
+        title: "People's Favourite",
+        description: 'Your songs were loved!',
+        points: 200,
+        recipient: winner.participant,
+        detail: `${winner.favouriteVotes} votes received`,
+      })
+    })
+  }
+
+  // 🧠 Trivia Champ - Highest trivia score (+150)
+  // Only add if there were trivia scores
+  if (triviaScores && Object.values(triviaScores).some(v => v > 0)) {
+    const triviaChamp = stats.reduce((max, s) =>
+      s.triviaScore > max.triviaScore ? s : max
+    )
+    if (triviaChamp.triviaScore > 0) {
+      awards.push({
+        id: 'trivia-champ',
+        emoji: '🧠',
+        title: 'Trivia Champ',
+        description: 'Christmas music expert!',
+        points: 150,
+        recipient: triviaChamp.participant,
+        detail: `${triviaChamp.triviaScore} trivia points`,
+      })
+    }
+  }
 
   return awards
 }

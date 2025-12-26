@@ -66,6 +66,8 @@ interface ResultsRevealProps {
   part1Rounds: RoundDetail[]
   part2Rounds: RoundDetail[]
   triviaScores: Record<string, number> // participantId -> trivia score
+  favouriteVoteCounts: Record<string, number> // participantId -> vote count
+  favouriteScores: Record<string, number> // participantId -> favourite points (50 per vote)
   submissions: Submission[] // For award popularity calculations
   onComplete: () => void
 }
@@ -82,6 +84,8 @@ export function ResultsReveal({
   part1Rounds,
   part2Rounds,
   triviaScores,
+  favouriteVoteCounts,
+  favouriteScores,
   submissions,
   onComplete,
 }: ResultsRevealProps) {
@@ -112,9 +116,15 @@ export function ResultsReveal({
       participant_id: s.participant_id,
       popularity: s.popularity,
     }))
-    const calculatedAwards = calculateAwards(participants, allRounds, submissionsWithParticipantId)
+    const calculatedAwards = calculateAwards(
+      participants,
+      allRounds,
+      submissionsWithParticipantId,
+      favouriteVoteCounts,
+      triviaScores
+    )
     setAwards(calculatedAwards)
-  }, [participants, allRounds, submissions])
+  }, [participants, allRounds, submissions, favouriteVoteCounts, triviaScores])
 
   // Pre-calculate final scores (used for skip and winner determination)
   const finalScoresCalculated = useMemo(() => {
@@ -139,18 +149,29 @@ export function ResultsReveal({
       scores[id] = (scores[id] || 0) + score
     })
 
+    // Add favourite scores (50 points per vote received)
+    Object.entries(favouriteScores).forEach(([id, score]) => {
+      scores[id] = (scores[id] || 0) + score
+    })
+
     // Add award points
     const submissionsWithParticipantId = submissions.map(s => ({
       participant_id: s.participant_id,
       popularity: s.popularity,
     }))
-    const calculatedAwards = calculateAwards(participants, allRounds, submissionsWithParticipantId)
+    const calculatedAwards = calculateAwards(
+      participants,
+      allRounds,
+      submissionsWithParticipantId,
+      favouriteVoteCounts,
+      triviaScores
+    )
     calculatedAwards.forEach(award => {
       scores[award.recipient.id] = (scores[award.recipient.id] || 0) + award.points
     })
 
     return scores
-  }, [participants, allRounds, triviaScores, submissions])
+  }, [participants, allRounds, triviaScores, favouriteScores, favouriteVoteCounts, submissions])
 
   // Sort participants by current score for leaderboard display
   const sortedParticipants = useMemo(() => {
