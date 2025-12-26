@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { SongRevealCard } from './song-reveal-card'
-import { Award, AwardBadge, calculateAwards } from './award-reveal'
+import { Award, calculateAwards } from './award-reveal'
 import { HeroAwards } from './hero-awards'
 import { WinnerReveal } from './winner-reveal'
 import type { Participant, Submission } from '@/types/database'
@@ -86,7 +86,6 @@ export function ResultsReveal({
     participants.forEach(p => { initial[p.id] = 0 })
     return initial
   })
-  const [chartData, setChartData] = useState<Array<{ step: number; [key: string]: number }>>([])
   const [awards, setAwards] = useState<Award[]>([])
   const [visibleAwards, setVisibleAwards] = useState(0) // Number of awards revealed
   const [isAutoPlaying, setIsAutoPlaying] = useState(true)
@@ -145,16 +144,12 @@ export function ResultsReveal({
     return scores
   }, [participants, allRounds, triviaScores, submissions])
 
-  // Update chart data whenever scores change
-  useEffect(() => {
-    setChartData(prev => {
-      const newPoint: { step: number; [key: string]: number } = { step: prev.length + 1 }
-      participants.forEach(p => {
-        newPoint[p.display_name] = liveScores[p.id] || 0
-      })
-      return [...prev, newPoint]
-    })
-  }, [liveScores, participants])
+  // Sort participants by current score for leaderboard display
+  const sortedParticipants = useMemo(() => {
+    return [...participants].sort(
+      (a, b) => (liveScores[b.id] || 0) - (liveScores[a.id] || 0)
+    )
+  }, [participants, liveScores])
 
   // Handle advancing to next item
   const advanceToNext = useCallback(() => {
@@ -344,12 +339,6 @@ export function ResultsReveal({
     return null
   }
 
-  // Calculate max score for Y axis
-  const maxScore = Math.max(
-    ...Object.values(liveScores),
-    100
-  )
-
   // Progress calculation (songs + trivia (if any) + awards + winner)
   const triviaSteps = hasTriviaScores ? 1 : 0
   const totalSteps = part1Rounds.length + triviaSteps + part2Rounds.length + awards.length + 1
@@ -361,133 +350,122 @@ export function ResultsReveal({
     part1Rounds.length + triviaSteps + part2Rounds.length + awards.length + 1
 
   return (
-    <div className="min-h-screen flex flex-col p-4">
-      {/* Chart - Top Section */}
-      <div className="flex-shrink-0 mb-4">
-        <Card className="border border-primary/20">
-          <CardContent className="pt-4">
-            <div className="h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={chartData}
-                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis
-                    dataKey="step"
-                    domain={[1, totalSteps]}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    tickLine={false}
-                    type="number"
-                    allowDataOverflow={false}
-                  />
-                  <YAxis
-                    domain={[0, maxScore + 100]}
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    tickLine={false}
-                    width={40}
-                  />
-                  {participants.map((participant, index) => (
-                    <Line
-                      key={participant.id}
-                      type="monotone"
-                      dataKey={participant.display_name}
-                      stroke={PLAYER_COLOURS[index % PLAYER_COLOURS.length]}
-                      strokeWidth={3}
-                      dot={{ fill: PLAYER_COLOURS[index % PLAYER_COLOURS.length], r: 4 }}
-                      isAnimationActive={false}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Legend */}
-            <div className="flex flex-wrap justify-center gap-3 mt-2 pb-2">
-              {participants.map((participant, index) => (
-                <div key={participant.id} className="flex items-center gap-1.5 text-sm">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: PLAYER_COLOURS[index % PLAYER_COLOURS.length] }}
-                  />
-                  <span>{participant.display_name}</span>
-                  <span className="text-muted-foreground font-mono">
-                    ({liveScores[participant.id] || 0})
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Awards - Show after Part 2 */}
-            {awards.length > 0 && (phase === 'part2' && currentIndex === part2Rounds.length - 1 || phase === 'winner' || visibleAwards > 0) && (
-              <div className="flex gap-2 mt-3 pt-3 border-t">
-                {awards.map((award, index) => (
-                  <AwardBadge
-                    key={award.id}
-                    award={award}
-                    isVisible={index < visibleAwards}
-                    delay={index * 100}
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Content - Middle Section */}
-      <div className="flex-1 flex flex-col justify-center max-w-lg mx-auto w-full">
-        {getCurrentContent()}
-      </div>
-
-      {/* Controls - Bottom Section */}
-      <div className="flex-shrink-0 mt-4 max-w-lg mx-auto w-full">
-        {/* Progress */}
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${(currentStep / totalSteps) * 100}%` }}
-            />
-          </div>
-          <span className="text-xs text-muted-foreground">
-            {currentStep}/{totalSteps}
-          </span>
+    <div className="min-h-screen flex flex-col items-center p-4">
+      <div className="w-full max-w-lg flex flex-col flex-1">
+        {/* Content - Song Card */}
+        <div className="flex-1 flex flex-col justify-center">
+          {getCurrentContent()}
         </div>
 
-        {/* Control Buttons */}
-        <div className="flex gap-2">
-          {phase !== 'winner' && phase !== 'trivia' && phase !== 'awards' && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => setIsAutoPlaying(!isAutoPlaying)}
-                className="flex-1"
-              >
-                {isAutoPlaying ? 'Pause' : 'Auto-play'}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={advanceToNext}
-                className="flex-1"
-              >
-                Next →
-              </Button>
-            </>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setVisibleAwards(awards.length)
-              // Set to pre-calculated final scores (stable calculation)
-              setLiveScores(finalScoresCalculated)
-              setPhase('winner')
-            }}
-            className="text-muted-foreground"
-          >
-            Skip All
-          </Button>
+        {/* Leaderboard - Below Song Card */}
+        <div className="flex-shrink-0 mt-4">
+          <Card className="border border-primary/20">
+            <CardContent className="py-3 px-4">
+              <div className="space-y-2">
+                {sortedParticipants.map((participant, index) => (
+                  <div
+                    key={participant.id}
+                    className="flex items-center gap-3 transition-all duration-500 ease-out"
+                    style={{
+                      transform: `translateY(0)`,
+                    }}
+                  >
+                    {/* Rank */}
+                    <span className="w-5 text-center text-sm font-medium text-muted-foreground">
+                      {index + 1}
+                    </span>
+
+                    {/* Avatar */}
+                    <Avatar className="h-7 w-7">
+                      <AvatarImage src={participant.avatar_url || undefined} />
+                      <AvatarFallback className="text-xs">
+                        {participant.display_name.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    {/* Name */}
+                    <span className="flex-1 text-sm font-medium truncate">
+                      {participant.display_name}
+                    </span>
+
+                    {/* Score */}
+                    <span className="text-sm font-bold tabular-nums text-primary">
+                      {liveScores[participant.id] || 0}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Controls - Bottom Section */}
+        <div className="flex-shrink-0 mt-4">
+          {/* Progress */}
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+              />
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {currentStep}/{totalSteps}
+            </span>
+          </div>
+
+          {/* Control Buttons */}
+          <div className="flex gap-2">
+            {phase !== 'winner' && phase !== 'trivia' && phase !== 'awards' && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsAutoPlaying(!isAutoPlaying)}
+                  className="flex-1"
+                >
+                  {isAutoPlaying ? 'Pause' : 'Auto-play'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={advanceToNext}
+                  className="flex-1"
+                >
+                  Next →
+                </Button>
+              </>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                // Skip to awards phase (scores before awards)
+                const scoresBeforeAwards: Record<string, number> = {}
+                participants.forEach(p => { scoresBeforeAwards[p.id] = 0 })
+
+                // Add all round scores
+                allRounds.forEach(round => {
+                  round.correctVoters.forEach(voter => {
+                    scoresBeforeAwards[voter.id] = (scoresBeforeAwards[voter.id] || 0) + 100
+                  })
+                  const chameleonResult = calculateChameleonPoints(round)
+                  if (chameleonResult) {
+                    scoresBeforeAwards[chameleonResult.ownerId] = (scoresBeforeAwards[chameleonResult.ownerId] || 0) + chameleonResult.points
+                  }
+                })
+
+                // Add trivia scores
+                Object.entries(triviaScores).forEach(([id, score]) => {
+                  scoresBeforeAwards[id] = (scoresBeforeAwards[id] || 0) + score
+                })
+
+                setLiveScores(scoresBeforeAwards)
+                setPhase('awards')
+              }}
+              className="text-muted-foreground"
+            >
+              Skip to Awards
+            </Button>
+          </div>
         </div>
       </div>
     </div>
