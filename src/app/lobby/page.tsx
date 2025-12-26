@@ -15,11 +15,13 @@ import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import type { Room } from '@/types/database'
 import { DEFAULT_GAME_SETTINGS } from '@/types/database'
+import { AlertTriangle, Trash2 } from 'lucide-react'
 
 interface RoomHistory {
   room: Room
   isHost: boolean
   playerCount: number
+  submittedCount: number
   lastActive: Date
 }
 
@@ -46,6 +48,7 @@ export default function LobbyPage() {
   const [isJoining, setIsJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [roomHistory, setRoomHistory] = useState<RoomHistory[]>([])
+  const [deletingRoomId, setDeletingRoomId] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
   const { setTrack } = useBackgroundMusic()
@@ -92,13 +95,17 @@ export default function LobbyPage() {
           // Fetch player counts for each room
           const { data: participantCounts } = await supabase
             .from('participants')
-            .select('room_id')
+            .select('room_id, has_submitted')
             .in('room_id', roomIds)
 
           // Count participants per room
           const countMap = new Map<string, number>()
+          const submittedMap = new Map<string, number>()
           participantCounts?.forEach(p => {
             countMap.set(p.room_id, (countMap.get(p.room_id) || 0) + 1)
+            if (p.has_submitted) {
+              submittedMap.set(p.room_id, (submittedMap.get(p.room_id) || 0) + 1)
+            }
           })
 
           const history: RoomHistory[] = roomsWithParticipants
@@ -108,6 +115,7 @@ export default function LobbyPage() {
                 room,
                 isHost: p.is_host,
                 playerCount: countMap.get(room.id) || 0,
+                submittedCount: submittedMap.get(room.id) || 0,
                 lastActive: new Date(room.updated_at),
               }
             })
@@ -165,6 +173,32 @@ export default function LobbyPage() {
       console.error('Error creating room:', err)
       setError('Failed to create room. Please try again.')
       setIsCreating(false)
+    }
+  }
+
+  const handleDeleteRoom = async (room: Room) => {
+    const confirmed = window.confirm('Delete this lobby? This removes its history for all players.')
+    if (!confirmed) return
+
+    setDeletingRoomId(room.id)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/rooms/${room.room_code}/delete`, {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to delete room')
+      }
+
+      setRoomHistory((prev) => prev.filter((entry) => entry.room.id !== room.id))
+    } catch (err) {
+      console.error('Error deleting room:', err)
+      setError('Failed to delete room. Please try again.')
+    } finally {
+      setDeletingRoomId(null)
     }
   }
 
@@ -321,47 +355,85 @@ export default function LobbyPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {roomHistory.map(({ room, isHost, playerCount, lastActive }) => (
-                  <button
-                    key={room.id}
-                    onClick={() => router.push(`/room/${room.room_code}`)}
-                    className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors text-left border border-border/50"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-sm leading-tight">
-                          {room.name || 'Untitled lobby'}
-                        </span>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <span className="font-mono font-bold">
-                            {room.room_code}
+                {roomHistory.map(({ room, isHost, playerCount, submittedCount, lastActive }) => {
+                  const hasUnfinishedSubmissions = room.status !== 'RESULTS' && submittedCount > 0
+                  return (
+                    <div
+                      key={room.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push(`/room/${room.room_code}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          router.push(`/room/${room.room_code}`)
+                        }
+                      }}
+                      className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors border border-border/50 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-sm leading-tight">
+                            {room.name || 'Untitled lobby'}
                           </span>
-                          <span>·</span>
-                          <span>{playerCount} {playerCount === 1 ? 'player' : 'players'}</span>
-                          <span>·</span>
-                          <span>{getRelativeTime(lastActive)}</span>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <span className="font-mono font-bold">
+                              {room.room_code}
+                            </span>
+                            <span>·</span>
+                            <span>{playerCount} {playerCount === 1 ? 'player' : 'players'}</span>
+                            <span>·</span>
+                            <span>{getRelativeTime(lastActive)}</span>
+                          </div>
+                          {hasUnfinishedSubmissions && (
+                            <div className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600">
+                              <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                              <span>
+                                {submittedCount} {submittedCount === 1 ? 'player has' : 'players have'} submitted answers
+                                — quiz not finished
+                              </span>
+                            </div>
+                          )}
                         </div>
+                        {isHost && (
+                          <span className="text-xs text-primary">(Host)</span>
+                        )}
                       </div>
-                      {isHost && (
-                        <span className="text-xs text-primary">(Host)</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          room.status === 'LOBBY' ? 'bg-blue-500/20 text-blue-500' :
+                          room.status === 'SUBMITTING' ? 'bg-amber-500/20 text-amber-500' :
+                          room.status === 'PLAYING_ROUND_1' || room.status === 'PLAYING_ROUND_2' ? 'bg-green-500/20 text-green-500' :
+                          room.status === 'TRIVIA' ? 'bg-purple-500/20 text-purple-500' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {room.status === 'LOBBY' ? 'Lobby' :
+                           room.status === 'SUBMITTING' ? 'Picking Songs' :
+                           room.status === 'PLAYING_ROUND_1' ? 'Part 1' :
+                           room.status === 'TRIVIA' ? 'Trivia' :
+                           room.status === 'PLAYING_ROUND_2' ? 'Part 2' :
+                           'Finished'}
+                        </span>
+                        {isHost && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground"
+                            title="Delete lobby"
+                            aria-label="Delete lobby"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteRoom(room)
+                            }}
+                            disabled={deletingRoomId === room.id}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      room.status === 'LOBBY' ? 'bg-blue-500/20 text-blue-500' :
-                      room.status === 'SUBMITTING' ? 'bg-amber-500/20 text-amber-500' :
-                      room.status === 'PLAYING_ROUND_1' || room.status === 'PLAYING_ROUND_2' ? 'bg-green-500/20 text-green-500' :
-                      room.status === 'TRIVIA' ? 'bg-purple-500/20 text-purple-500' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
-                      {room.status === 'LOBBY' ? 'Lobby' :
-                       room.status === 'SUBMITTING' ? 'Picking Songs' :
-                       room.status === 'PLAYING_ROUND_1' ? 'Part 1' :
-                       room.status === 'TRIVIA' ? 'Trivia' :
-                       room.status === 'PLAYING_ROUND_2' ? 'Part 2' :
-                       'Finished'}
-                    </span>
-                  </button>
-                ))}
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
